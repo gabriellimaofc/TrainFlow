@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="TrainFlow — Gerenciamento de treino com base científica">
+  <meta name="theme-color" content="#0e0e0f">
+  <title>TrainFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+  <script src="js/config.js"        defer></script>
+  <script src="js/core.js"          defer></script>
+  <script src="js/views/student.js" defer></script>
+  <script src="js/views/trainer.js" defer></script>
+  <script src="js/app.js"           defer></script>
+  <style>.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}</style>
+</head>
+<body>
+
+<!-- ── TOASTS ─────────────────────────────────────────────── -->
+<div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     AUTH SCREEN
+══════════════════════════════════════════════════════════ -->
+<div id="auth-screen" class="auth-screen">
+  <div class="auth-bg-glow"  aria-hidden="true"></div>
+  <div class="auth-bg-glow2" aria-hidden="true"></div>
+  <div class="auth-container">
+
+    <div class="auth-logo" aria-label="TrainFlow">
+      <span class="logo-train">Train</span><span class="logo-flow">Flow</span>
+    </div>
+    <p class="auth-tagline">Treino com base científica · Progresso real</p>
+
+    <!-- LOGIN -->
+    <div id="login-form" class="auth-card" role="form" aria-label="Login">
+      <h2>Entrar</h2>
+      <div class="form-group">
+        <label for="login-email">Email</label>
+        <input type="email" id="login-email" placeholder="seu@email.com"
+               autocomplete="email" aria-required="true">
+      </div>
+      <div class="form-group">
+        <label for="login-password">Senha</label>
+        <input type="password" id="login-password" placeholder="••••••"
+               autocomplete="current-password" aria-required="true">
+      </div>
+      <div id="login-error" class="auth-error hidden" role="alert"></div>
+      <button class="btn-primary full" id="btn-login"
+              data-label="Entrar" onclick="handleLogin()">
+        <span>Entrar</span>
+      </button>
+      <p class="auth-switch">
+        Não tem conta? <a href="#" onclick="toggleAuth('signup')">Criar conta</a>
+      </p>
+      <div class="auth-demo">
+        <a href="#" onclick="enterDemoMode()">Usar sem conta (modo demo)</a>
+      </div>
+    </div>
+
+    <!-- SIGNUP -->
+    <div id="signup-form" class="auth-card hidden" role="form" aria-label="Cadastro">
+      <h2>Criar conta</h2>
+      <div class="form-group">
+        <label>Você é</label>
+        <div class="role-selector" role="group" aria-label="Tipo de usuário">
+          <div class="role-option" data-role="aluno"
+               role="radio" aria-checked="true" tabindex="0">
+            <span class="role-icon" aria-hidden="true">🏋️</span>
+            <div class="role-label">Aluno</div>
+            <div class="role-desc">Quero treinar</div>
+          </div>
+          <div class="role-option" data-role="treinador"
+               role="radio" aria-checked="false" tabindex="0">
+            <span class="role-icon" aria-hidden="true">📋</span>
+            <div class="role-label">Treinador</div>
+            <div class="role-desc">Gerencio alunos</div>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="signup-nome">Nome completo</label>
+        <input type="text" id="signup-nome" placeholder="Seu nome"
+               autocomplete="name" aria-required="true">
+      </div>
+      <div class="form-group">
+        <label for="signup-email">Email</label>
+        <input type="email" id="signup-email" placeholder="seu@email.com"
+               autocomplete="email" aria-required="true">
+      </div>
+      <div class="form-group">
+        <label for="signup-password">Senha <small>(mín. 6 caracteres)</small></label>
+        <input type="password" id="signup-password" placeholder="••••••"
+               autocomplete="new-password" aria-required="true">
+      </div>
+      <div id="signup-error" class="auth-error hidden" role="alert"></div>
+      <button class="btn-primary full" id="btn-signup"
+              data-label="Criar conta" onclick="handleSignup()">
+        <span>Criar conta</span>
+      </button>
+      <p class="auth-switch">
+        Já tem conta? <a href="#" onclick="toggleAuth('login')">Entrar</a>
+      </p>
+    </div>
+
+  </div><!-- /auth-container -->
+</div><!-- /auth-screen -->
+
+<!-- ══════════════════════════════════════════════════════════
+     APP SCREEN
+══════════════════════════════════════════════════════════ -->
+<div id="app-screen" class="app-screen hidden">
+
+  <!-- SIDEBAR (desktop) -->
+  <aside class="sidebar" role="navigation" aria-label="Menu principal">
+    <div class="sidebar-logo" aria-label="TrainFlow">
+      <span class="logo-train">Train</span><span class="logo-flow">Flow</span>
+    </div>
+    <nav class="sidebar-nav" id="sidebar-nav" role="menu"></nav>
+    <div class="sidebar-user">
+      <div class="user-avatar-wrap">
+        <div class="user-avatar" aria-hidden="true">A</div>
+        <div>
+          <div class="user-name-text">Usuário</div>
+          <div class="user-role-text">Aluno · free</div>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="handleLogout()"
+              aria-label="Sair da conta" title="Sair">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16,17 21,12 16,7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content" id="main-content">
+
+    <!-- Mobile header -->
+    <header class="mobile-header">
+      <div class="sidebar-logo small">
+        <span class="logo-train">Train</span><span class="logo-flow">Flow</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="user-avatar small" aria-hidden="true">A</div>
+        <button class="btn-logout" onclick="handleLogout()" aria-label="Sair">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16,17 21,12 16,7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ===================================================
+         VIEW: DASHBOARD (aluno)
+    =================================================== -->
+    <section id="view-dashboard" class="view">
+      <div class="view-header">
+        <div class="view-label">Visão geral</div>
+        <h1 id="dashboard-greeting">Olá! 👋</h1>
+        <p class="view-sub" id="dashboard-date"></p>
+      </div>
+
+      <div id="alerts-zone" role="region" aria-label="Alertas"></div>
+
+      <div class="stats-grid">
+        <div class="stat-card accent">
+          <div class="stat-icon-big" aria-hidden="true">🔥</div>
+          <div class="stat-val" id="stat-streak">0</div>
+          <div class="stat-lbl">Dias seguidos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-big" aria-hidden="true">💪</div>
+          <div class="stat-val" id="stat-week">0</div>
+          <div class="stat-lbl">Esta semana</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-big" aria-hidden="true">🏆</div>
+          <div class="stat-val" id="stat-total">0</div>
+          <div class="stat-lbl">Treinos totais</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-big" aria-hidden="true">⚡</div>
+          <div class="stat-val" id="stat-deload">—</div>
+          <div class="stat-lbl">p/ Deload</div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="sc-header">
+          <div>
+            <div class="sc-label">Iniciar</div>
+            <h3 class="sc-title">Qual treino hoje?</h3>
+          </div>
+        </div>
+        <div class="day-quick-grid" id="dashboard-day-grid"></div>
+      </div>
+
+      <div class="section-card">
+        <div class="sc-header">
+          <div>
+            <div class="sc-label">Histórico</div>
+            <h3 class="sc-title">Atividade Recente</h3>
+          </div>
+        </div>
+        <div id="recent-activity-list"></div>
+      </div>
+    </section>
+
+    <!-- ===================================================
+         VIEW: PROGRAMA
+    =================================================== -->
+    <section id="view-programa" class="view">
+      <div class="view-header">
+        <div class="view-label">Seu programa</div>
+        <h1>Programa <span>5 Dias</span></h1>
+        <p class="view-sub">
+          Baseado em evidências científicas · Schoenfeld (2016) · ACSM
+        </p>
+      </div>
+      <nav class="day-pill-nav" id="programa-day-nav"
+           role="tablist" aria-label="Dias do treino"></nav>
+      <div id="programa-day-content" role="tabpanel"></div>
+    </section>
+
+    <!-- ===================================================
+         VIEW: TREINAR
+    =================================================== -->
+    <section id="view-treinar" class="view">
+
+      <!-- Seleção de dia -->
+      <div id="workout-select-screen">
+        <div class="view-header">
+          <div class="view-label">Modo treino</div>
+          <h1>Iniciar <span>Treino</span></h1>
+          <p class="view-sub">Selecione o dia e registre cada série</p>
+        </div>
+        <div class="day-quick-grid" id="treinar-day-grid"></div>
+      </div>
+
+      <!-- Treino ativo -->
+      <div id="workout-active-screen" class="hidden">
+
+        <div class="workout-top-bar">
+          <div class="wtb-left">
+            <button class="btn-ghost" onclick="cancelWorkout()"
+                    aria-label="Cancelar treino e voltar">← Voltar</button>
+            <div>
+              <div class="wtb-day-name" id="active-day-name">Lower A</div>
+              <div class="wtb-sub"      id="active-day-focus">Glúteos + Isquiotibiais</div>
+            </div>
+          </div>
+          <div class="wtb-right">
+            <div class="workout-clock"     id="workout-clock"     aria-live="off">00:00</div>
+            <div class="workout-prog-text" id="workout-prog-text" aria-live="polite">0/6</div>
+          </div>
+        </div>
+
+        <div class="workout-prog-bar-wrap"
+             role="progressbar" aria-label="Progresso do treino">
+          <div class="workout-prog-bar" id="workout-prog-bar" style="width:0%"></div>
+        </div>
+
+        <!-- Timer de descanso (overlay) -->
+        <div id="rest-overlay" class="rest-overlay hidden"
+             role="dialog" aria-modal="true" aria-label="Timer de descanso">
+          <div class="rest-card">
+            <div class="rest-label">DESCANSO</div>
+            <svg class="rest-ring" viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="rest-ring-bg"   cx="60" cy="60" r="54"/>
+              <circle class="rest-ring-fill" id="rest-ring-fill" cx="60" cy="60" r="54"/>
+            </svg>
+            <div class="rest-num" id="rest-num" aria-live="polite">90</div>
+            <button class="btn-secondary" onclick="skipRest()">Pular ↩</button>
+          </div>
+        </div>
+
+        <div id="active-exercise-list" role="list"></div>
+
+        <div class="workout-finish-wrap">
+          <button class="btn-finish" onclick="finishWorkout()"
+                  aria-label="Finalizar treino">✓ Finalizar Treino</button>
+        </div>
+
+      </div><!-- /workout-active-screen -->
+    </section>
+
+    <!-- ===================================================
+         VIEW: PROGRESSO
+    =================================================== -->
+    <section id="view-progresso" class="view">
+      <div class="view-header">
+        <div class="view-label">Evolução</div>
+        <h1>Meu <span>Progresso</span></h1>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card accent">
+          <div class="stat-val" id="prog-streak">0</div>
+          <div class="stat-lbl">🔥 Streak atual</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="prog-best">0</div>
+          <div class="stat-lbl">🏆 Melhor streak</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="prog-total">0</div>
+          <div class="stat-lbl">💪 Total treinos</div>
+        </div>
+      </div>
+
+      <div id="view-progresso-content">
+        <div class="section-card">
+          <div class="sc-header">
+            <div>
+              <div class="sc-label">Gráfico de carga</div>
+              <h3 class="sc-title">Evolução por Exercício</h3>
+            </div>
+          </div>
+          <div style="padding:16px">
+            <select id="chart-exercise-select"
+                    aria-label="Selecionar exercício para gráfico"
+                    onchange="renderProgressChart()"
+                    style="width:100%;margin-bottom:12px;background:var(--bg3);
+                           border:1px solid var(--border);border-radius:8px;
+                           color:var(--text);padding:10px 13px;font-size:14px;outline:none">
+              <option value="">Escolha um exercício...</option>
+            </select>
+          </div>
+          <div class="chart-container"
+               role="img" aria-label="Gráfico de evolução de carga">
+            <canvas id="progress-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <div class="sc-header">
+            <div>
+              <div class="sc-label">Recordes pessoais</div>
+              <h3 class="sc-title">Máximos por Exercício</h3>
+            </div>
+          </div>
+          <div id="pr-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================
+         VIEW: PERFIL
+    =================================================== -->
+    <section id="view-perfil" class="view">
+      <div class="view-header">
+        <div class="view-label">Conta</div>
+        <h1>Meu <span>Perfil</span></h1>
+      </div>
+      <div id="perfil-view-content"></div>
+    </section>
+
+    <!-- ===================================================
+         VIEW: CARDIO
+    =================================================== -->
+    <section id="view-cardio" class="view">
+      <div class="view-header">
+        <div class="view-label">Estratégia</div>
+        <h1>Protocolo <span>Cardio</span></h1>
+      </div>
+
+      <div class="note-box warn">
+        <strong>⚠️ Regra de ouro:</strong> Nunca faça HIIT no dia anterior a uma
+        sessão pesada de pernas. A depleção de glicogênio prejudica força e síntese
+        proteica muscular (Wilson et al., 2012).
+      </div>
+
+      <div class="section-card">
+        <div class="sc-header">
+          <div>
+            <div class="sc-label">Visão geral</div>
+            <h3 class="sc-title">Tipos e Quando Fazer</h3>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" aria-label="Protocolos de cardio">
+            <thead>
+              <tr>
+                <th>Tipo</th><th>Frequência</th>
+                <th>Quando</th><th>Duração</th><th>Por quê</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong class="c-blue">LISS Zona 2</strong></td>
+                <td>3–4×/sem</td>
+                <td>Após Lower (seg, qua, sex)</td>
+                <td>20–35 min</td>
+                <td>Queima fat, mínima interferência muscular</td>
+              </tr>
+              <tr>
+                <td><strong class="c-accent">HIIT</strong></td>
+                <td>Máx. 2×/sem</td>
+                <td>Após Upper APENAS (ter e qui)</td>
+                <td>15–18 min</td>
+                <td>Alta eficiência calórica, longe das pernas</td>
+              </tr>
+              <tr>
+                <td><strong class="c-green">Esteira Inclinada</strong></td>
+                <td>1–2×/sem</td>
+                <td>Após Lower B (qua)</td>
+                <td>15–20 min</td>
+                <td>Queima sem impacto articular</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="protocol-grid">
+        <div class="protocol-card hiit">
+          <div class="proto-icon">⚡</div>
+          <div class="proto-type">HIIT — Terça</div>
+          <div class="proto-desc">Após Upper Push</div>
+          <div class="proto-detail">30s forte / 60–90s leve</div>
+          <div class="proto-rounds">6–8 rounds · ~15–18 min</div>
+          <div class="proto-mode">Esteira ou bicicleta</div>
+        </div>
+        <div class="protocol-card hiit">
+          <div class="proto-icon">⚡</div>
+          <div class="proto-type">HIIT — Quinta</div>
+          <div class="proto-desc">Após Upper Pull</div>
+          <div class="proto-detail">40s forte / 80s leve</div>
+          <div class="proto-rounds">6–7 rounds · ~15–18 min</div>
+          <div class="proto-mode">Bicicleta</div>
+        </div>
+        <div class="protocol-card liss">
+          <div class="proto-icon">🚶</div>
+          <div class="proto-type">LISS Zona 2</div>
+          <div class="proto-desc">Após treinos Lower</div>
+          <div class="proto-detail">55–65% FC máx · Zona 2</div>
+          <div class="proto-rounds">20–35 min contínuos</div>
+          <div class="proto-mode">Bike, caminhada ou esteira</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================
+         VIEW: CIÊNCIA
+    =================================================== -->
+    <section id="view-ciencia" class="view">
+      <div class="view-header">
+        <div class="view-label">Base científica</div>
+        <h1>A <span>Ciência</span> por Trás</h1>
+      </div>
+
+      <div class="sci-grid">
+        <div class="sci-card">
+          <div class="sci-ref">Schoenfeld, 2016 · JSCR</div>
+          <h4>Volume: 10–20 sets/músculo/semana</h4>
+          <p>Meta-análise mostrou relação dose-resposta para hipertrofia até ~20 sets. Acima disso, recuperação comprometida sem ganhos adicionais para intermediários.</p>
+        </div>
+        <div class="sci-card">
+          <div class="sci-ref">Schoenfeld & Grgic, 2017</div>
+          <h4>Frequência 2× é superior a 1×</h4>
+          <p>Treinar cada músculo 2× por semana promove maior síntese proteica — mesmo com volume total equivalente. Frequência distribuída = melhor utilização do estímulo.</p>
+        </div>
+        <div class="sci-card">
+          <div class="sci-ref">Schoenfeld et al., 2021</div>
+          <h4>Comprimento muscular importa</h4>
+          <p>Treinar em posição alongada (mesa flexora sentada, stiff com amplitude total) promove maior hipertrofia — especialmente em isquiotibiais e glúteos.</p>
+        </div>
+        <div class="sci-card">
+          <div class="sci-ref">ACSM Position Stand, 2009</div>
+          <h4>Sobrecarga progressiva é obrigatória</h4>
+          <p>Sem aumento de carga, volume ou densidade ao longo do tempo, não há sinal de adaptação. Sobrecarga progressiva é o principal driver da hipertrofia.</p>
+        </div>
+        <div class="sci-card">
+          <div class="sci-ref">Wilson et al., 2012</div>
+          <h4>Interferência do treino concorrente</h4>
+          <p>HIIT após treino de MMII ativa AMPK, suprimindo mTORC1 — principal via da síntese proteica. Fazer HIIT nos dias de Upper elimina o conflito.</p>
+        </div>
+        <div class="sci-card">
+          <div class="sci-ref">Israetel et al. — RP Strength</div>
+          <h4>RIR: treinar perto da falha</h4>
+          <p>Treinar entre RIR 1–3 maximiza recrutamento de unidades motoras sem o excesso de dano da falha concêntrica. Alvo: RPE 8–9 nos compostos.</p>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="sc-header">
+          <div>
+            <div class="sc-label">Volume semanal</div>
+            <h3 class="sc-title">Sets por Grupo Muscular — TrainFlow</h3>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr><th>Grupo</th><th>Sets/sem</th><th>Status</th><th>Vs. antes</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Glúteos</td><td>20–22</td><td><span class="badge green">Ideal</span></td><td>Redistribuído em 3 dias</td></tr>
+              <tr><td>Isquiotibiais</td><td>9–11</td><td><span class="badge green">Ideal</span></td><td>Melhor distribuição</td></tr>
+              <tr><td>Quadríceps</td><td>13–15</td><td><span class="badge green">Ideal</span></td><td>1 dia → 2 dias</td></tr>
+              <tr><td>Peitoral</td><td>10</td><td><span class="badge green">✅ Incluído</span></td><td>Era 0 sets — corrigido</td></tr>
+              <tr><td>Costas</td><td>13</td><td><span class="badge green">Ideal</span></td><td>Frequência 2× mantida</td></tr>
+              <tr><td>Deltoides</td><td>11</td><td><span class="badge green">Ideal</span></td><td>Reduzido de 17 sets</td></tr>
+              <tr><td>Tríceps</td><td>9</td><td><span class="badge green">Ideal</span></td><td>+via supinos compostos</td></tr>
+              <tr><td>Bíceps</td><td>9</td><td><span class="badge green">Ideal</span></td><td>+4 sets vs. antes</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================
+         VIEW: PERIODIZAÇÃO
+    =================================================== -->
+    <section id="view-periodizacao" class="view">
+      <div class="view-header">
+        <div class="view-label">Longo prazo</div>
+        <h1>Progressão & <span>Periodização</span></h1>
+      </div>
+
+      <div id="deload-alert-block" role="status"></div>
+
+      <div class="prog-grid">
+        <div class="prog-card">
+          <div class="prog-num" aria-hidden="true">01</div>
+          <h4>Dupla Progressão</h4>
+          <p>Comece em 3×8. Suba as reps até 3×12. Ao chegar em 12, aumente ~2,5–5 kg e volte para 3×8.</p>
+        </div>
+        <div class="prog-card">
+          <div class="prog-num" aria-hidden="true">02</div>
+          <h4>Registre Tudo</h4>
+          <p>O TrainFlow salva automaticamente cada sessão. Sem registro não há progressão consciente.</p>
+        </div>
+        <div class="prog-card">
+          <div class="prog-num" aria-hidden="true">03</div>
+          <h4>Deload a cada 4–6 semanas</h4>
+          <p>Reduza o volume em ~40% por 1 semana — mesmas cargas, menos séries. O app avisa automaticamente.</p>
+        </div>
+        <div class="prog-card">
+          <div class="prog-num" aria-hidden="true">04</div>
+          <h4>Blocos de 8–12 semanas</h4>
+          <p>Mantenha os exercícios compostos por pelo menos 8 semanas. Troque exercícios entre blocos.</p>
+        </div>
+        <div class="prog-card">
+          <div class="prog-num" aria-hidden="true">05</div>
+          <h4>Proteína: 1,6–2 g/kg</h4>
+          <p>Déficit calórico moderado (~300–500 kcal) para emagrecimento sem perda muscular.</p>
+        </div>
+        <div class="prog-card">
+          <div class="prog-num" aria-hidden="true">06</div>
+          <h4>Auto-regulação</h4>
+          <p>Exausta? Reduza o HIIT primeiro. Cardio é a variável mais fácil de ajustar.</p>
+        </div>
+      </div>
+
+      <div class="section-card" style="margin-top:24px">
+        <div class="sc-header">
+          <div>
+            <div class="sc-label">Referência de intensidade</div>
+            <h3 class="sc-title">Como Calibrar o RPE</h3>
+          </div>
+        </div>
+        <div class="rpe-guide-grid">
+          <div class="rpe-item"><strong>RPE 6</strong><span>4 reps na reserva — aquecimento</span></div>
+          <div class="rpe-item"><strong>RPE 7</strong><span>3 reps na reserva — volume leve</span></div>
+          <div class="rpe-item accent"><strong>RPE 8</strong><span>2 reps na reserva — alvo principal</span></div>
+          <div class="rpe-item accent"><strong>RPE 9</strong><span>1 rep na reserva — compostos pesados</span></div>
+          <div class="rpe-item"><strong>RPE 10</strong><span>Falha — usar com moderação</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================
+         VIEW: TRAINER DASHBOARD
+    =================================================== -->
+    <section id="view-trainer-dashboard" class="view">
+      <div class="view-header">
+        <div class="view-label">Área do Treinador</div>
+        <h1 id="trainer-greeting">Olá! 👋</h1>
+        <p class="view-sub" id="trainer-date"></p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card accent">
+          <div class="stat-icon-big" aria-hidden="true">👥</div>
+          <div class="stat-val" id="trainer-stat-alunos">0</div>
+          <div class="stat-lbl">Alunos vinculados</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-big" aria-hidden="true">✅</div>
+          <div class="stat-val" id="trainer-stat-ativos">0</div>
+          <div class="stat-lbl">Com perfil ativo</div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="sc-header">
+          <div>
+            <div class="sc-label">Seus alunos</div>
+            <h3 class="sc-title">Lista Rápida</h3>
+          </div>
+          <button class="btn-primary" onclick="openVincularAluno()">+ Vincular Aluno</button>
+        </div>
+        <div id="trainer-alunos-quick"></div>
+      </div>
+    </section>
+
+    <!-- ===================================================
+         VIEW: TRAINER ALUNOS
+    =================================================== -->
+    <section id="view-trainer-alunos" class="view">
+      <div class="view-header">
+        <div class="view-label">Gerenciamento</div>
+        <h1>Meus <span>Alunos</span></h1>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+        <button class="btn-primary" onclick="openVincularAluno()">
+          + Vincular Aluno
+        </button>
+      </div>
+      <div class="section-card">
+        <div id="trainer-alunos-full"></div>
+      </div>
+    </section>
+
+  </main><!-- /main-content -->
+
+  <!-- BOTTOM NAV (mobile) -->
+  <nav class="bottom-nav" id="bottom-nav"
+       role="navigation" aria-label="Navegação mobile"></nav>
+
+</div><!-- /app-screen -->
+
+<!-- ══════════════════════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════════════════════ -->
+
+<!-- Modal: Registrar exercício -->
+<div id="modal-log" class="modal hidden"
+     role="dialog" aria-modal="true" aria-labelledby="modal-log-label">
+  <div class="modal-backdrop" onclick="closeModal()"></div>
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 id="modal-ex-name" id="modal-log-label">Exercício</h3>
+      <button class="modal-close" onclick="closeModal()" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-ex-info" id="modal-ex-info"></div>
+      <div class="log-inputs">
+        <div class="form-group">
+          <label for="modal-carga">Carga (kg)</label>
+          <input type="number" id="modal-carga"
+                 placeholder="40" min="0" step="0.5">
+        </div>
+        <div class="form-group">
+          <label for="modal-reps">Reps</label>
+          <input type="number" id="modal-reps"
+                 placeholder="10" min="1">
+        </div>
+        <div class="form-group">
+          <label for="modal-series">Séries</label>
+          <input type="number" id="modal-series"
+                 placeholder="3" min="1" max="10">
+        </div>
+      </div>
+      <div id="modal-last-log" class="last-log-hint hidden" role="status"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost"   onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveLog()">Salvar & Descansar ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Editar perfil do aluno -->
+<div id="modal-perfil" class="modal hidden"
+     role="dialog" aria-modal="true" aria-label="Editar perfil">
+  <div class="modal-backdrop" onclick="closeModal()"></div>
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>Editar Perfil</h3>
+      <button class="modal-close" onclick="closeModal()" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body" id="modal-perfil-form"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost"   onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveModal()">Salvar ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Registrar medidas corporais -->
+<div id="modal-medidas" class="modal hidden"
+     role="dialog" aria-modal="true" aria-label="Registrar medidas">
+  <div class="modal-backdrop" onclick="closeModal()"></div>
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>Registrar Medidas</h3>
+      <button class="modal-close" onclick="closeModal()" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body" id="modal-medidas-form"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost"   onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveModal()">Salvar ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Detalhe do aluno (treinador) -->
+<div id="modal-aluno" class="modal hidden"
+     role="dialog" aria-modal="true" aria-label="Detalhes do aluno">
+  <div class="modal-backdrop" onclick="closeModal()"></div>
+  <div class="modal-card" style="max-width:640px">
+    <div class="modal-header">
+      <h3>Aluno</h3>
+      <button class="modal-close" onclick="closeModal()" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body" id="modal-aluno-content"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Vincular aluno (treinador) -->
+<div id="modal-vincular" class="modal hidden"
+     role="dialog" aria-modal="true" aria-label="Vincular aluno">
+  <div class="modal-backdrop" onclick="closeModal()"></div>
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>Vincular Aluno</h3>
+      <button class="modal-close" onclick="closeModal()" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body" id="modal-vincular-content"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost"   onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" onclick="saveModal()">Vincular ✓</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
