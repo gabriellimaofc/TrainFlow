@@ -1784,6 +1784,861 @@ select option {
 }
 
 /* ================================================================
+   SCIENCE / CARDIO / PREMIUM / UX
+   ================================================================ */
+.stat-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  border: 1px solid var(--border-subtle);
+}
+
+.stat-icon-flame {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+}
+
+.stat-icon-calendar {
+  background: rgba(59, 130, 246, 0.14);
+  color: #60a5fa;
+}
+
+.stat-icon-trophy {
+  background: rgba(250, 204, 21, 0.12);
+  color: #facc15;
+}
+
+.skeleton-block {
+  display: grid;
+  gap: 10px;
+}
+
+.skeleton-grid {
+  min-height: 220px;
+}
+
+.skeleton-line {
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.1), rgba(255,255,255,0.04));
+  background-size: 200% 100%;
+  animation: shimmer 1.3s infinite linear;
+}
+
+.skeleton-line-1 {
+  width: 72%;
+}
+
+.skeleton-line-2 {
+  width: 100%;
+}
+
+.skeleton-line-3 {
+  width: 88%;
+}
+
+.skeleton-line-4 {
+  width: 64%;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.empty-text.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.science-shell,
+.science-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.science-tabs,
+.science-chip-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.science-tab,
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease);
+}
+
+.science-tab:hover,
+.filter-chip:hover {
+  border-color: var(--primary-border);
+  transform: translateY(-1px);
+}
+
+.science-tab.active,
+.filter-chip.active {
+  background: var(--primary-dim);
+  color: var(--primary-hover);
+  border-color: var(--primary-border);
+}
+
+.science-grid {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.method-card,
+.threshold-card,
+.issue-card,
+.volume-group-card,
+.cardio-card,
+.cardio-mini-card,
+.exercise-reference-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.method-card-head {
+  width: 100%;
+  padding: 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.method-card.open,
+.exercise-grid-card.selected {
+  border-color: var(--primary-border);
+  box-shadow: 0 10px 30px rgba(99, 102, 241, 0.08);
+}
+
+.method-card-title {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.method-icon,
+.threshold-icon,
+.issue-icon,
+.cardio-card-icon,
+.exercise-reference-icon,
+.confirm-icon {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--primary-hover);
+}
+
+.method-card-title h4,
+.threshold-card h4,
+.issue-card h4,
+.cardio-card h4,
+.exercise-reference-card h4 {
+  margin-bottom: 6px;
+}
+
+.method-card-meta,
+.cardio-benefits,
+.volume-stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.method-card-body,
+.science-text-block,
+.science-toolbar {
+  padding: 0 16px 16px;
+}
+
+.method-description,
+.threshold-card p,
+.issue-card p,
+.cardio-card p,
+.exercise-reference-card p,
+.cardio-mini-card p {
+  color: var(--text-3);
+}
+
+.science-example {
+  margin: 16px 0;
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(99,102,241,0.12), rgba(99,102,241,0.05));
+  border: 1px solid var(--primary-border);
+}
+
+.science-example.compact {
+  margin-bottom: 0;
+}
+
+.science-example-label,
+.threshold-sigla,
+.obs-label,
+.confirm-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.rir-table-wrap,
+.science-table-wrap {
+  overflow: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 14px;
+}
+
+.rir-table,
+.science-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg);
+}
+
+.rir-table th,
+.rir-table td,
+.science-table th,
+.science-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  font-size: 13px;
+}
+
+.rir-table tbody tr:last-child td,
+.science-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.study-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.study-item {
+  color: var(--text-4);
+  font-size: 13px;
+}
+
+.study-item em {
+  font-style: italic;
+}
+
+.method-tip,
+.science-warning p,
+.exercise-reference-equip,
+.cardio-tips p,
+.detail-badges,
+.confirm-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.science-warning {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.level-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.level-green {
+  background: rgba(34, 197, 94, 0.12);
+  color: #86efac;
+}
+
+.level-yellow {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+}
+
+.level-red {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+}
+
+.science-chip {
+  background: rgba(255,255,255,0.04);
+}
+
+.threshold-header,
+.issue-head,
+.cardio-card-head,
+.volume-group-head,
+.cardio-mini-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 16px 0;
+}
+
+.threshold-gauge {
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.06);
+  margin: 14px 16px;
+}
+
+.threshold-gauge-fill {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.volume-groups-grid,
+.cardio-grid,
+.exercise-reference-grid {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.volume-group-card,
+.exercise-reference-card,
+.cardio-card {
+  padding: 16px;
+}
+
+.volume-progress {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 0.8fr;
+  gap: 6px;
+  margin: 14px 0 12px;
+}
+
+.volume-progress-segment {
+  height: 10px;
+  border-radius: 999px;
+}
+
+.volume-progress-segment.mev {
+  background: rgba(59, 130, 246, 0.65);
+}
+
+.volume-progress-segment.mav {
+  background: rgba(34, 197, 94, 0.7);
+}
+
+.volume-progress-segment.mrv {
+  background: rgba(239, 68, 68, 0.75);
+}
+
+.volume-stats span {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.science-toolbar {
+  display: grid;
+  gap: 14px;
+}
+
+.compact {
+  padding-top: 0;
+}
+
+.cardio-summary-grid {
+  grid-template-columns: 1fr;
+}
+
+.cardio-mini-card {
+  padding: 16px;
+}
+
+.cardio-mini-meta,
+.exercise-grid-group {
+  color: var(--text-4);
+  font-size: 12px;
+}
+
+.cardio-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.cardio-metrics div {
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border-subtle);
+}
+
+.cardio-metrics span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-4);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.cardio-tips {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.exercise-selector-shell {
+  display: grid;
+  gap: 14px;
+}
+
+.exercise-selector-toolbar {
+  display: grid;
+  gap: 14px;
+}
+
+.selection-bar {
+  position: sticky;
+  top: 72px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(24, 24, 27, 0.94);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  backdrop-filter: blur(12px);
+}
+
+.selection-bar-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.selection-bar-copy span {
+  color: var(--text-4);
+  font-size: 12px;
+}
+
+.exercise-card-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.exercise-grid-card {
+  position: relative;
+  text-align: left;
+  padding: 16px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  color: var(--text);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.exercise-grid-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary-border);
+}
+
+.exercise-grid-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.exercise-grid-icon,
+.exercise-grid-check {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--primary-hover);
+}
+
+.exercise-grid-check {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+}
+
+.exercise-grid-name {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.exercise-grid-tip {
+  margin-top: 10px;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.aluno-plan-stack {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.btn-premium {
+  white-space: nowrap;
+}
+
+.btn-premium-remove {
+  padding-inline: 8px;
+}
+
+.trainer-premium-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  margin: 16px 0;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  background: rgba(255,255,255,0.02);
+}
+
+.confirm-copy {
+  align-items: center;
+}
+
+.confirm-text {
+  color: var(--text-3);
+  margin-top: 6px;
+}
+
+.detail-badges {
+  flex-wrap: wrap;
+}
+
+.exercise-title-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn-video-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease);
+}
+
+.btn-video-inline:hover {
+  background: rgba(239, 68, 68, 0.2);
+  transform: translateY(-1px);
+}
+
+.video-modal-frame {
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  background: #000;
+  aspect-ratio: 16 / 9;
+}
+
+.video-modal-frame iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.evolution-shell {
+  display: grid;
+  gap: 18px;
+  padding: 16px;
+}
+
+.evolution-summary-grid,
+.insights-grid,
+.progress-analysis-grid,
+.progress-methods-grid,
+.heatmap-panels,
+.pr-card-list {
+  display: grid;
+  gap: 14px;
+}
+
+.evolution-grid.two-col {
+  display: grid;
+  gap: 16px;
+}
+
+.inner-card {
+  margin-bottom: 0;
+}
+
+.summary-card,
+.insight-card,
+.pr-highlight-card,
+.progress-card,
+.progress-method-card,
+.heatmap-panel {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-2);
+  padding: 16px;
+}
+
+.summary-card strong,
+.pr-highlight-value {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.1;
+  margin: 12px 0 8px;
+}
+
+.summary-card-head,
+.pr-highlight-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.summary-card p,
+.insight-card p,
+.progress-card p,
+.progress-method-card p,
+.pr-highlight-date {
+  color: var(--text-3);
+}
+
+.summary-progress {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.summary-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #6366f1, #22c55e);
+}
+
+.week-mini-heatmap {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.week-day-box {
+  display: grid;
+  place-items: center;
+  min-height: 48px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-4);
+  border: 1px solid var(--border-subtle);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.week-day-box.light,
+.heatmap-cell.light {
+  background: rgba(34, 197, 94, 0.18);
+  color: #86efac;
+}
+
+.week-day-box.strong,
+.heatmap-cell.strong {
+  background: rgba(34, 197, 94, 0.42);
+  color: #dcfce7;
+}
+
+.insight-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.insight-card .insight-icon {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+}
+
+.insight-success {
+  border-color: rgba(34,197,94,0.26);
+}
+
+.insight-warning {
+  border-color: rgba(245,158,11,0.24);
+}
+
+.insight-alert {
+  border-color: rgba(239,68,68,0.24);
+}
+
+.insight-info {
+  border-color: rgba(59,130,246,0.24);
+}
+
+.chart-wrap {
+  position: relative;
+  min-height: 320px;
+  padding: 16px;
+}
+
+.radar-alert-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 16px 16px;
+}
+
+.chip-alert,
+.progress-chip.warning,
+.progress-chip.danger {
+  background: rgba(239,68,68,0.12);
+  color: #fca5a5;
+  border-color: rgba(239,68,68,0.2);
+}
+
+.pr-highlight-head,
+.progress-card-head,
+.progress-method-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.pr-highlight-value span {
+  font-size: 15px;
+  color: var(--text-3);
+}
+
+.chip-pr-new {
+  background: rgba(245,158,11,0.14);
+  color: #fbbf24;
+  border-color: rgba(245,158,11,0.26);
+  animation: pulse-chip 1.4s infinite;
+}
+
+@keyframes pulse-chip {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+.month-heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.heatmap-title {
+  font-weight: 700;
+}
+
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.04);
+}
+
+.progress-suggestions {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.progress-card.excellent {
+  border-color: rgba(34,197,94,0.26);
+}
+
+.progress-card.stable {
+  border-color: rgba(59,130,246,0.24);
+}
+
+.progress-card.warning {
+  border-color: rgba(245,158,11,0.24);
+}
+
+.progress-card.danger {
+  border-color: rgba(239,68,68,0.24);
+}
+
+.progress-chip.excellent {
+  background: rgba(34,197,94,0.12);
+  color: #86efac;
+  border-color: rgba(34,197,94,0.24);
+}
+
+.progress-chip.stable {
+  background: rgba(59,130,246,0.12);
+  color: #93c5fd;
+  border-color: rgba(59,130,246,0.24);
+}
+
+/* ================================================================
    RESPONSIVIDADE
    ================================================================ */
 @media (min-width: 700px) {
@@ -1841,6 +2696,28 @@ select option {
   .workout-quick-card {
     padding: 16px;
   }
+
+  .science-grid,
+  .cardio-grid,
+  .exercise-reference-grid,
+  .volume-groups-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .exercise-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .evolution-summary-grid,
+  .insights-grid,
+  .pr-card-list,
+  .progress-methods-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .evolution-grid.two-col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (min-width: 900px) {
@@ -1871,5 +2748,32 @@ select option {
   .info-grid,
   .medidas-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .science-grid.science-methods {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .threshold-grid,
+  .cardio-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .issue-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .exercise-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .evolution-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .insights-grid,
+  .progress-analysis-grid,
+  .heatmap-panels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

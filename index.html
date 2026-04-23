@@ -20,6 +20,7 @@
 
   <!-- Scripts da SPA -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
   <script src="js/config.js" defer></script>
   <script src="js/icons.js" defer></script>
   <script src="js/core.js" defer></script>
@@ -377,14 +378,17 @@
 
         <div class="stats-grid">
           <div class="stat-card accent">
+            <div class="stat-icon stat-icon-flame" aria-hidden="true" id="stat-icon-streak"></div>
             <div class="stat-val" id="stat-streak">0</div>
             <div class="stat-label">Dias seguidos</div>
           </div>
           <div class="stat-card">
+            <div class="stat-icon stat-icon-calendar" aria-hidden="true" id="stat-icon-week"></div>
             <div class="stat-val" id="stat-week">0</div>
             <div class="stat-label">Esta semana</div>
           </div>
           <div class="stat-card">
+            <div class="stat-icon stat-icon-trophy" aria-hidden="true" id="stat-icon-total"></div>
             <div class="stat-val" id="stat-total">0</div>
             <div class="stat-label">Sessões totais</div>
           </div>
@@ -435,14 +439,17 @@
 
         <div class="stats-grid">
           <div class="stat-card">
+            <div class="stat-icon stat-icon-flame" aria-hidden="true" id="prog-icon-streak"></div>
             <div class="stat-val" id="prog-streak">0</div>
             <div class="stat-label">Streak</div>
           </div>
           <div class="stat-card">
+            <div class="stat-icon stat-icon-calendar" aria-hidden="true" id="prog-icon-week"></div>
             <div class="stat-val" id="prog-week">0</div>
             <div class="stat-label">Esta semana</div>
           </div>
           <div class="stat-card">
+            <div class="stat-icon stat-icon-trophy" aria-hidden="true" id="prog-icon-total"></div>
             <div class="stat-val" id="prog-total">0</div>
             <div class="stat-label">Total</div>
           </div>
@@ -479,28 +486,7 @@
           <p>Princípios essenciais para treinar com inteligência.</p>
         </div>
 
-        <div class="section-card">
-          <div class="section-header">
-            <div>
-              <div class="section-label">Hipertrofia</div>
-              <h3>Fundamentos</h3>
-            </div>
-          </div>
-          <div style="padding:16px" class="content-cards">
-            <article class="content-card">
-              <h4>Progressão de carga</h4>
-              <p>A evolução consistente depende de aumentar gradualmente carga, repetições ou qualidade da execução.</p>
-            </article>
-            <article class="content-card">
-              <h4>Volume semanal</h4>
-              <p>O volume total por grupo muscular é um dos principais fatores para hipertrofia, desde que haja recuperação adequada.</p>
-            </article>
-            <article class="content-card">
-              <h4>Recuperação</h4>
-              <p>Sono, alimentação e gestão de fadiga influenciam diretamente a adaptação ao treino.</p>
-            </article>
-          </div>
-        </div>
+        <div id="science-content"></div>
       </section>
 
       <!-- ===================== ALUNO / CARDIO ===================== -->
@@ -511,31 +497,7 @@
           <p>Entenda quando usar HIIT, LISS e Zona 2 sem atrapalhar seus objetivos de treino.</p>
         </div>
 
-        <div class="section-card">
-          <div class="section-header">
-            <div>
-              <div class="section-label">Protocolos</div>
-              <h3>Tipos de cardio</h3>
-            </div>
-          </div>
-
-          <div style="padding:16px" class="content-cards">
-            <article class="content-card">
-              <h4>HIIT</h4>
-              <p>Alta intensidade com intervalos curtos. Útil para condicionamento, mas exige mais recuperação.</p>
-            </article>
-
-            <article class="content-card">
-              <h4>LISS</h4>
-              <p>Baixa intensidade e duração maior. Mais sustentável e com menor interferência na musculação.</p>
-            </article>
-
-            <article class="content-card">
-              <h4>Zona 2</h4>
-              <p>Esforço moderado, bom para base aeróbica, recuperação e saúde cardiovascular.</p>
-            </article>
-          </div>
-        </div>
+        <div id="cardio-content"></div>
       </section>
 
       <!-- ===================== TREINADOR / DASHBOARD ===================== -->
@@ -861,6 +823,50 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" type="button" onclick="closeModal()">Cancelar</button>
         <button class="btn btn-primary" type="button" onclick="saveModal()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-confirm" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-confirm-title">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-confirm-title">Confirmar ação</h3>
+        <button class="modal-close" type="button" onclick="closeModal()" aria-label="Fechar">×</button>
+      </div>
+
+      <div class="modal-body">
+        <div id="modal-confirm-content"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" type="button" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" id="modal-confirm-action" type="button" onclick="saveModal()">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-video" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-card modal-wide" role="dialog" aria-modal="true" aria-labelledby="modal-video-title">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-video-title">Ver execução</h3>
+        <button class="modal-close" type="button" onclick="closeModal()" aria-label="Fechar">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="video-modal-frame">
+          <iframe
+            id="exercise-video-frame"
+            title="Vídeo de execução"
+            src="about:blank"
+            loading="lazy"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowfullscreen
+          ></iframe>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" type="button" onclick="closeModal()">Fechar</button>
       </div>
     </div>
   </div>

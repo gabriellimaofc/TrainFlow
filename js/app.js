@@ -173,7 +173,7 @@ App.boot = {
     const initial = App.utils.initial(nome);
     const role = App.auth.isTrainer()
       ? 'Treinador'
-      : `Aluno · ${u?.plan_type || 'free'}`;
+      : `Aluno · ${App.auth.isPremium() ? 'premium' : 'free'}`;
 
     document.querySelectorAll('.user-avatar').forEach((el) => {
       el.textContent = initial;

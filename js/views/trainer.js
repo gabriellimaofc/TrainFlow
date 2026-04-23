@@ -1,41 +1,25 @@
 /* =================================================================
    views/trainer.js — Área completa do treinador
-   -----------------------------------------------------------------
-   Responsabilidades deste arquivo:
-   1) Dashboard do treinador
-   2) Lista e busca de alunos
-   3) Vínculo treinador ↔ aluno
-   4) Detalhe do aluno e observações
-   5) Criação de treino com biblioteca filtrável
-   6) Modal manager compatível com o restante da SPA
-   -----------------------------------------------------------------
-   Regras importantes preservadas:
-   - Usa namespace App.*
-   - Não quebra a estrutura atual do projeto
-   - Continua compatível com Supabase e schema atual
    ================================================================= */
 
 App.views = App.views || {};
 App.views.trainer = {
-  /* Cache local para evitar refetch desnecessário */
   _alunosCache: [],
   _treinosCache: [],
   _exerciseSearch: '',
   _exerciseGroup: '',
+  _alunoSearch: '',
 
-  /* ===============================================================
-     DASHBOARD DO TREINADOR
-     =============================================================== */
   async renderDashboard() {
     const user = App.state.user;
-
     const greetEl = document.getElementById('trainer-greeting');
     const statAlunosEl = document.getElementById('trainer-stat-alunos');
     const statTreinosEl = document.getElementById('trainer-stat-treinos');
+    const quickEl = document.getElementById('trainer-alunos-quick');
 
     if (greetEl) greetEl.textContent = App.utils.greeting(user?.nome);
+    if (quickEl) quickEl.innerHTML = App.utils.skeleton(4, 'skeleton-list');
 
-    /* Busca alunos e treinos do treinador */
     const [alunos, treinos] = await Promise.all([
       App.data.getAlunosDoTreinador(user?.id),
       App.data.getTreinosDoTreinador(user?.id),
@@ -59,7 +43,7 @@ App.views.trainer = {
         <div class="empty-state">
           <div class="empty-icon">${App.icons.get('users', 40)}</div>
           <h3>Nenhum aluno vinculado</h3>
-          <p>Vincule alunos para começar a montar treinos personalizados.</p>
+          <p>Vincule seus primeiros alunos para começar a entregar treinos personalizados.</p>
           <button class="btn btn-primary" onclick="App.views.trainer._openVincularModal()">
             ${App.icons.get('user-plus', 15)} Vincular aluno
           </button>
@@ -74,13 +58,7 @@ App.views.trainer = {
       .join('');
   },
 
-  /* ===============================================================
-     LISTA DE ALUNOS
-     =============================================================== */
   async renderAlunos() {
-    const alunos = await App.data.getAlunosDoTreinador(App.state.user?.id);
-    this._alunosCache = alunos || [];
-
     const el = document.getElementById('trainer-alunos-list');
     if (!el) return;
 
@@ -88,31 +66,28 @@ App.views.trainer = {
       <div class="list-toolbar">
         <div class="search-field">
           <span class="search-icon">${App.icons.get('search', 16)}</span>
-          <input
-            type="search"
-            id="aluno-search"
-            placeholder="Buscar por nome ou email..."
-            aria-label="Buscar aluno"
-          >
+          <input type="search" id="aluno-search" placeholder="Buscar por nome ou email..." aria-label="Buscar aluno">
         </div>
-
         <button class="btn btn-primary btn-sm" onclick="App.views.trainer._openVincularModal()">
           ${App.icons.get('user-plus', 15)} Vincular aluno
         </button>
       </div>
-
-      <div id="alunos-results"></div>
+      <div id="alunos-results">${App.utils.skeleton(5, 'skeleton-list')}</div>
     `;
+
+    const alunos = await App.data.getAlunosDoTreinador(App.state.user?.id);
+    this._alunosCache = alunos || [];
 
     const input = document.getElementById('aluno-search');
     if (input) {
-      input.addEventListener(
-        'input',
-        App.utils.debounce(() => this._filterAlunos(input.value), 180)
-      );
+      input.value = this._alunoSearch;
+      input.addEventListener('input', App.utils.debounce(() => {
+        this._alunoSearch = input.value || '';
+        this._filterAlunos(this._alunoSearch);
+      }, 300));
     }
 
-    this._filterAlunos('');
+    this._filterAlunos(this._alunoSearch);
   },
 
   _filterAlunos(query) {
@@ -120,30 +95,31 @@ App.views.trainer = {
 
     const filtered = this._alunosCache.filter((row) => {
       const aluno = row.aluno || row;
-
-      return (
-        !q ||
-        (aluno.nome || '').toLowerCase().includes(q) ||
-        (aluno.email || '').toLowerCase().includes(q)
-      );
+      return !q || (aluno.nome || '').toLowerCase().includes(q) || (aluno.email || '').toLowerCase().includes(q);
     });
 
     const el = document.getElementById('alunos-results');
     if (!el) return;
 
     if (!filtered.length) {
-      el.innerHTML = `<p class="empty-text">Nenhum aluno encontrado.</p>`;
+      el.innerHTML = App.utils.emptyState({
+        icon: 'search',
+        title: 'Nenhum aluno encontrado',
+        text: 'Tente outro nome ou email. Sua lista continua pronta para receber novos vínculos.',
+      });
       return;
     }
 
-    el.innerHTML = filtered
-      .map((row) => this._buildAlunoRow(row.aluno || row, true))
-      .join('');
+    el.innerHTML = filtered.map((row) => this._buildAlunoRow(row.aluno || row, true)).join('');
+  },
+
+  _effectivePlan(aluno) {
+    return App.data.isAlunoPremium(aluno?.id, aluno?.plan_type) ? 'premium' : 'free';
   },
 
   _buildAlunoRow(aluno, showActions = false) {
     const ini = App.utils.initial(aluno?.nome);
-    const plan = aluno?.plan_type || 'free';
+    const plan = this._effectivePlan(aluno);
 
     return `
       <div class="aluno-row" role="listitem">
@@ -154,54 +130,83 @@ App.views.trainer = {
           <div class="aluno-email">${App.utils.esc(aluno?.email || '')}</div>
         </div>
 
-        <span class="chip chip-plan ${plan}">
-          ${plan === 'premium' ? 'Premium' : 'Free'}
-        </span>
+        <div class="aluno-plan-stack">
+          <span class="chip chip-plan ${plan}">
+            ${plan === 'premium' ? `${App.icons.get('crown', 12)} PREMIUM` : 'Free'}
+          </span>
+          ${plan !== 'premium' ? `
+            <button class="btn btn-secondary btn-sm btn-premium" type="button" onclick="App.views.trainer.confirmTogglePremium('${aluno?.id}', true)">
+              ${App.icons.get('crown', 14)} Tornar Premium
+            </button>
+          ` : `
+            <button class="btn btn-ghost btn-sm btn-premium-remove" type="button" onclick="App.views.trainer.confirmTogglePremium('${aluno?.id}', false)">
+              Remover Premium
+            </button>
+          `}
+        </div>
 
-        ${
-          showActions
-            ? `
-              <div class="aluno-actions">
-                <button class="btn btn-secondary btn-sm" onclick="App.views.trainer.openAlunoDetail('${aluno?.id}')">
-                  ${App.icons.get('eye', 15)} Detalhes
-                </button>
-
-                <button class="btn btn-primary btn-sm" onclick="App.boot.navigateTo('criar-treino','${aluno?.id}')">
-                  ${App.icons.get('plus', 15)} Treino
-                </button>
-              </div>
-            `
-            : ''
-        }
+        ${showActions ? `
+          <div class="aluno-actions">
+            <button class="btn btn-secondary btn-sm" onclick="App.views.trainer.openAlunoDetail('${aluno?.id}')">
+              ${App.icons.get('eye', 15)} Detalhes
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="App.boot.navigateTo('criar-treino','${aluno?.id}')">
+              ${App.icons.get('plus', 15)} Treino
+            </button>
+          </div>
+        ` : ''}
       </div>
     `;
   },
 
-  /* ===============================================================
-     DETALHE DO ALUNO
-     =============================================================== */
+  confirmTogglePremium(alunoId, makePremium) {
+    const aluno = this._findAluno(alunoId);
+    App.utils.confirm({
+      title: makePremium ? 'Ativar Premium' : 'Remover Premium',
+      message: makePremium
+        ? `Deseja liberar todos os recursos premium para ${aluno?.nome || 'este aluno'}?`
+        : `Deseja remover o acesso premium de ${aluno?.nome || 'este aluno'}?`,
+      confirmText: makePremium ? 'Confirmar Premium' : 'Remover acesso',
+      confirmClass: makePremium ? 'btn-primary' : 'btn-danger',
+      onConfirm: async () => {
+        App.data.setAlunoPremium(alunoId, makePremium);
+        App.utils.toast(makePremium ? 'Aluno liberado como Premium.' : 'Acesso Premium removido.', 'success');
+        if (App.state.currentView === 'trainer-dashboard') this._renderAlunosQuickList(this._alunosCache);
+        if (App.state.currentView === 'trainer-alunos') this._filterAlunos(this._alunoSearch);
+        if (App.state.selectedAluno === alunoId) await this.openAlunoDetail(alunoId);
+      },
+    });
+  },
+
+  _findAluno(alunoId) {
+    return this._alunosCache.find((row) => (row.aluno || row)?.id === alunoId)?.aluno ||
+      this._alunosCache.find((row) => (row.aluno || row)?.id === alunoId) ||
+      null;
+  },
+
   async openAlunoDetail(alunoId) {
     App.state.selectedAluno = alunoId;
+    const content = document.getElementById('modal-aluno-content');
+    if (content) content.innerHTML = App.utils.skeleton(5, 'skeleton-panel');
 
-    /* Busca histórico e observações */
     const [history, observacoes] = await Promise.all([
       App.data.getHistory(alunoId),
       App.data.getObservacoes(alunoId),
     ]);
 
-    const aluno =
-      this._alunosCache.find((a) => (a.aluno || a)?.id === alunoId)?.aluno ||
-      this._alunosCache.find((a) => (a.aluno || a)?.id === alunoId) ||
-      {};
+    const aluno = this._findAluno(alunoId) || {};
+    const plan = this._effectivePlan(aluno);
 
-    const content = document.getElementById('modal-aluno-content');
     if (!content) return;
 
     content.innerHTML = `
       <div class="aluno-detail-header">
         <div class="aluno-avatar lg">${App.utils.initial(aluno?.nome)}</div>
         <div>
-          <h3>${App.utils.esc(aluno?.nome || 'Aluno')}</h3>
+          <div class="detail-badges">
+            <h3>${App.utils.esc(aluno?.nome || 'Aluno')}</h3>
+            ${plan === 'premium' ? `<span class="chip chip-plan premium">${App.icons.get('crown', 12)} PREMIUM</span>` : ''}
+          </div>
           <p>${App.utils.esc(aluno?.email || '')}</p>
         </div>
       </div>
@@ -211,16 +216,30 @@ App.views.trainer = {
           <div class="mini-stat-val">${history.length}</div>
           <div class="mini-stat-lbl">Sessões</div>
         </div>
-
         <div class="mini-stat">
           <div class="mini-stat-val">${App.utils.calcStreak(history.map((h) => h.data || h.date))}</div>
           <div class="mini-stat-lbl">Streak</div>
         </div>
-
         <div class="mini-stat">
           <div class="mini-stat-val">${App.utils.countThisWeek(history)}</div>
           <div class="mini-stat-lbl">Esta semana</div>
         </div>
+      </div>
+
+      <div class="trainer-premium-panel">
+        <div>
+          <div class="obs-label">Plano atual</div>
+          <p class="c-muted">${plan === 'premium' ? 'Acesso completo liberado neste navegador.' : 'Aluno com acesso Free no momento.'}</p>
+        </div>
+        ${plan !== 'premium' ? `
+          <button class="btn btn-secondary btn-sm" type="button" onclick="App.views.trainer.confirmTogglePremium('${alunoId}', true)">
+            ${App.icons.get('crown', 14)} Tornar Premium
+          </button>
+        ` : `
+          <button class="btn btn-ghost btn-sm" type="button" onclick="App.views.trainer.confirmTogglePremium('${alunoId}', false)">
+            Remover Premium
+          </button>
+        `}
       </div>
 
       <div class="obs-section">
@@ -231,26 +250,17 @@ App.views.trainer = {
         </button>
       </div>
 
-      ${
-        observacoes?.length
-          ? `
-            <div class="obs-history">
-              <div class="obs-label">Observações anteriores</div>
-              ${observacoes
-                .slice(0, 5)
-                .map(
-                  (o) => `
-                    <div class="obs-item">
-                      <div class="obs-date">${App.utils.fmtDate((o.created_at || '').split('T')[0])}</div>
-                      <p>${App.utils.esc(o.conteudo || '')}</p>
-                    </div>
-                  `
-                )
-                .join('')}
+      ${observacoes?.length ? `
+        <div class="obs-history">
+          <div class="obs-label">Observações anteriores</div>
+          ${observacoes.slice(0, 5).map((o) => `
+            <div class="obs-item">
+              <div class="obs-date">${App.utils.fmtDate((o.created_at || '').split('T')[0])}</div>
+              <p>${App.utils.esc(o.conteudo || '')}</p>
             </div>
-          `
-          : ''
-      }
+          `).join('')}
+        </div>
+      ` : App.utils.emptyState({ icon: 'note', title: 'Sem observações ainda', text: 'Adicione feedbacks rápidos para acompanhar a evolução com mais contexto.' })}
 
       <div class="aluno-actions-footer">
         <button class="btn btn-primary" onclick="App.boot.navigateTo('criar-treino','${alunoId}'); App.modal.close();">
@@ -259,9 +269,7 @@ App.views.trainer = {
       </div>
     `;
 
-    App.modal.open('modal-aluno', `Aluno: ${App.utils.esc(aluno?.nome || '')}`, null, {
-      wide: true,
-    });
+    App.modal.open('modal-aluno', `Aluno: ${App.utils.esc(aluno?.nome || '')}`, null, { wide: true });
   },
 
   async _saveObs(alunoId) {
@@ -273,7 +281,6 @@ App.views.trainer = {
     }
 
     const saved = await App.data.saveObservacao(App.state.user.id, alunoId, txt);
-
     if (!saved) {
       App.utils.toast('Não foi possível salvar a observação.', 'error');
       return;
@@ -283,9 +290,6 @@ App.views.trainer = {
     await this.openAlunoDetail(alunoId);
   },
 
-  /* ===============================================================
-     VINCULAR ALUNO
-     =============================================================== */
   _openVincularModal() {
     const resultBox = document.getElementById('vincular-result');
     if (resultBox) resultBox.innerHTML = '';
@@ -301,65 +305,38 @@ App.views.trainer = {
     const resultEl = document.getElementById('vincular-result');
 
     if (!email) {
-      if (resultEl) {
-        resultEl.innerHTML = `<div class="auth-error">Informe o email do aluno.</div>`;
-      }
+      if (resultEl) resultEl.innerHTML = `<div class="auth-error">Informe o email do aluno.</div>`;
       return;
     }
 
     if (!App.utils.isEmail(email)) {
-      if (resultEl) {
-        resultEl.innerHTML = `<div class="auth-error">Email inválido.</div>`;
-      }
+      if (resultEl) resultEl.innerHTML = `<div class="auth-error">Email inválido.</div>`;
       return;
     }
 
-    if (resultEl) {
-      resultEl.innerHTML = `<div class="auth-success">Buscando aluno...</div>`;
-    }
-
+    if (resultEl) resultEl.innerHTML = `<div class="auth-success">Buscando aluno...</div>`;
     const result = await App.data.vincularAluno(App.state.user.id, email);
 
     if (result.error) {
-      if (resultEl) {
-        resultEl.innerHTML = `<div class="auth-error">${App.utils.esc(result.error)}</div>`;
-      }
+      if (resultEl) resultEl.innerHTML = `<div class="auth-error">${App.utils.esc(result.error)}</div>`;
       return;
-    }
-
-    if (resultEl) {
-      resultEl.innerHTML = `<div class="auth-success">Aluno vinculado com sucesso.</div>`;
     }
 
     App.utils.toast(`${result.aluno?.nome || 'Aluno'} vinculado com sucesso!`);
     App.modal.close();
-
-    /* Atualiza as duas telas */
     await this.renderDashboard();
     await this.renderAlunos();
   },
 
-  /* ===============================================================
-     CRIAR TREINO
-     =============================================================== */
   async renderCriarTreino(alunoId) {
     App.state.selectedAluno = alunoId || null;
-
-    /* Mantém o rascunho limpo ao entrar na tela */
     App.state.workoutDraft = [];
     this._exerciseSearch = '';
     this._exerciseGroup = '';
 
-    const alunos =
-      this._alunosCache.length
-        ? this._alunosCache
-        : await App.data.getAlunosDoTreinador(App.state.user?.id);
-
+    const alunos = this._alunosCache.length ? this._alunosCache : await App.data.getAlunosDoTreinador(App.state.user?.id);
     this._alunosCache = alunos || [];
 
-    const exercicios = await App.data.getExercicios();
-
-    /* Select de aluno */
     const alunoSelect = document.getElementById('treino-aluno-select');
     if (alunoSelect) {
       alunoSelect.innerHTML =
@@ -367,65 +344,57 @@ App.views.trainer = {
         this._alunosCache
           .map((row) => {
             const al = row.aluno || row;
-            return `
-              <option value="${al.id}" ${al.id === alunoId ? 'selected' : ''}>
-                ${App.utils.esc(al.nome)}
-              </option>
-            `;
+            return `<option value="${al.id}" ${al.id === alunoId ? 'selected' : ''}>${App.utils.esc(al.nome)}</option>`;
           })
           .join('');
     }
 
-    /* Cabeçalho de filtro da biblioteca */
     const lib = document.getElementById('exercise-library');
     if (lib) {
       lib.innerHTML = `
-        <div class="exercise-lib-toolbar">
-          <div class="search-field">
-            <span class="search-icon">${App.icons.get('search', 16)}</span>
-            <input
-              type="search"
-              id="exercise-search"
-              placeholder="Buscar exercício..."
-              aria-label="Buscar exercício"
-            >
+        <div class="exercise-selector-shell">
+          <div class="exercise-selector-toolbar">
+            <div class="search-field">
+              <span class="search-icon">${App.icons.get('search', 16)}</span>
+              <input type="search" id="exercise-search" placeholder="Buscar exercício..." aria-label="Buscar exercício">
+            </div>
+            <div class="science-chip-row compact" id="exercise-group-chips">
+              ${['Todos', 'Peito', 'Costas', 'Pernas', 'Ombro', 'Bíceps', 'Tríceps', 'Core', 'Cardio']
+                .map((group) => `<button class="filter-chip ${group === 'Todos' ? 'active' : ''}" type="button" onclick="App.views.trainer.setExerciseGroup('${group}')">${group}</button>`)
+                .join('')}
+            </div>
           </div>
-
-          <div class="form-group" style="margin-bottom:0">
-            <select id="exercise-group-filter" aria-label="Filtrar por grupo muscular">
-              <option value="">Todos os grupos</option>
-              ${App.MUSCLE_GROUPS.map((g) => `<option value="${g}">${g}</option>`).join('')}
-            </select>
-          </div>
+          <div id="exercise-selection-bar"></div>
+          <div id="exercise-library-results">${App.utils.skeleton(6, 'skeleton-grid')}</div>
         </div>
-
-        <div id="exercise-library-results"></div>
       `;
-
-      const searchInput = document.getElementById('exercise-search');
-      const groupSelect = document.getElementById('exercise-group-filter');
-
-      if (searchInput) {
-        searchInput.addEventListener(
-          'input',
-          App.utils.debounce(() => {
-            this._exerciseSearch = searchInput.value || '';
-            this._renderExerciseLibrary(exercicios);
-          }, 180)
-        );
-      }
-
-      if (groupSelect) {
-        groupSelect.addEventListener('change', () => {
-          this._exerciseGroup = groupSelect.value || '';
-          this._renderExerciseLibrary(exercicios);
-        });
-      }
-
-      this._renderExerciseLibrary(exercicios);
     }
 
+    const draft = document.getElementById('treino-draft');
+    if (draft) draft.innerHTML = App.utils.emptyState({ icon: 'plus', title: 'Nenhum exercício selecionado', text: 'Escolha exercícios na biblioteca para começar a montar o treino.' });
+
+    const exercicios = await App.data.getExercicios();
+    this._bindExerciseSearch(exercicios);
+    this._renderExerciseLibrary(exercicios);
     this.renderDraft();
+  },
+
+  _bindExerciseSearch(exercicios) {
+    const searchInput = document.getElementById('exercise-search');
+    if (!searchInput) return;
+
+    searchInput.addEventListener('input', App.utils.debounce(() => {
+      this._exerciseSearch = searchInput.value || '';
+      this._renderExerciseLibrary(exercicios);
+    }, 300));
+  },
+
+  setExerciseGroup(group) {
+    this._exerciseGroup = group === 'Todos' ? '' : group;
+    document.querySelectorAll('#exercise-group-chips .filter-chip').forEach((chip) => {
+      chip.classList.toggle('active', chip.textContent === group);
+    });
+    this._renderExerciseLibrary(App.state.exerciseList || []);
   },
 
   _renderExerciseLibrary(exercicios) {
@@ -436,48 +405,79 @@ App.views.trainer = {
     const group = this._exerciseGroup || '';
 
     const filtered = (exercicios || []).filter((ex) => {
-      const matchQuery =
-        !q ||
-        (ex.nome || '').toLowerCase().includes(q) ||
-        (ex.grupo_muscular || '').toLowerCase().includes(q);
-
-      const matchGroup = !group || ex.grupo_muscular === group;
-
+      const normalizedGroup = ex.grupo_muscular === 'Glúteos' ? 'Pernas' : ex.grupo_muscular;
+      const matchQuery = !q || (ex.nome || '').toLowerCase().includes(q) || (ex.grupo_muscular || '').toLowerCase().includes(q);
+      const matchGroup = !group || normalizedGroup === group;
       return matchQuery && matchGroup;
     });
 
+    this._renderSelectionBar();
+
     if (!filtered.length) {
-      resultsEl.innerHTML = `<p class="empty-text">Nenhum exercício encontrado para os filtros atuais.</p>`;
+      resultsEl.innerHTML = App.utils.emptyState({
+        icon: 'search',
+        title: 'Nenhum exercício encontrado',
+        text: 'Ajuste a busca ou troque o grupo muscular para explorar novas opções.',
+      });
       return;
     }
 
-    resultsEl.innerHTML = filtered
-      .map(
-        (ex) => `
-          <div class="exercise-lib-item">
-            <div class="exercise-lib-main">
-              <div class="exercise-lib-name">${App.utils.esc(ex.nome)}</div>
-              <div class="exercise-lib-meta">
-                ${App.utils.esc(ex.grupo_muscular)} · ${App.utils.esc(App.EXERCISE_TYPES[ex.tipo] || ex.tipo || '—')}
-              </div>
-              ${
-                ex.execucao
-                  ? `<div class="exercise-lib-tip">${App.utils.esc(ex.execucao)}</div>`
-                  : ''
-              }
-            </div>
+    resultsEl.innerHTML = `<div class="exercise-card-grid">${filtered.map((ex) => this._buildExerciseGridCard(ex)).join('')}</div>`;
+  },
 
-            <button
-              class="btn btn-secondary btn-sm"
-              onclick="App.views.trainer.addExerciseToDraft(${ex.id})"
-              aria-label="Adicionar ${App.utils.esc(ex.nome)} ao treino"
-            >
-              ${App.icons.get('plus', 14)} Adicionar
-            </button>
-          </div>
-        `
-      )
-      .join('');
+  _buildExerciseGridCard(ex) {
+    const selected = App.state.workoutDraft.some((item) => item.exercicio_id === ex.id);
+    const group = ex.grupo_muscular === 'Glúteos' ? 'Pernas' : ex.grupo_muscular;
+
+    return `
+      <button class="exercise-grid-card ${selected ? 'selected' : ''}" type="button" onclick="App.views.trainer.addExerciseToDraft(${ex.id})">
+        <span class="exercise-grid-check">${selected ? App.icons.get('check-circle', 16) : ''}</span>
+        <div class="exercise-grid-top">
+          <span class="exercise-grid-icon">${App.icons.get(this._iconForGroup(group), 16)}</span>
+          <span class="badge-sm badge-type">${App.utils.esc(App.EXERCISE_TYPES[ex.tipo] || ex.tipo || '—')}</span>
+        </div>
+        <div class="exercise-grid-name">${App.utils.esc(ex.nome)}</div>
+        <div class="exercise-grid-group">${App.utils.esc(group || 'Geral')}</div>
+        <p class="exercise-grid-tip">${App.utils.esc(ex.execucao || 'Execução guiada e amplitude controlada.')}</p>
+      </button>
+    `;
+  },
+
+  _iconForGroup(group) {
+    const map = {
+      Peito: 'shield',
+      Costas: 'layers',
+      Pernas: 'activity',
+      Ombro: 'trending-up',
+      Bíceps: 'dumbbell',
+      Tríceps: 'zap',
+      Core: 'target',
+      Cardio: 'heart',
+      Glúteos: 'activity',
+    };
+    return map[group] || 'dumbbell';
+  },
+
+  _renderSelectionBar() {
+    const bar = document.getElementById('exercise-selection-bar');
+    if (!bar) return;
+
+    const count = App.state.workoutDraft.length;
+    bar.innerHTML = `
+      <div class="selection-bar">
+        <div class="selection-bar-copy">
+          <strong>${count} exercícios selecionados</strong>
+          <span>${count ? 'Seu rascunho está pronto para ajustes finos.' : 'Selecione exercícios para começar o treino.'}</span>
+        </div>
+        <button class="btn btn-primary btn-sm" type="button" onclick="App.views.trainer.scrollToDraft()" ${count ? '' : 'disabled'}>
+          Continuar
+        </button>
+      </div>
+    `;
+  },
+
+  scrollToDraft() {
+    document.getElementById('treino-draft')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   },
 
   addExerciseToDraft(exercicioId) {
@@ -496,18 +496,28 @@ App.views.trainer = {
     });
 
     this.renderDraft();
+    this._renderExerciseLibrary(App.state.exerciseList || []);
     App.utils.toast(`${ex.nome} adicionado ao treino.`, 'success', 1800);
   },
 
   removeExerciseFromDraft(index) {
-    App.state.workoutDraft.splice(index, 1);
-    this.renderDraft();
+    App.utils.confirm({
+      title: 'Remover exercício',
+      message: 'Deseja remover este exercício do rascunho atual?',
+      confirmText: 'Remover',
+      confirmClass: 'btn-danger',
+      onConfirm: () => {
+        App.state.workoutDraft.splice(index, 1);
+        this.renderDraft();
+        this._renderExerciseLibrary(App.state.exerciseList || []);
+        App.utils.toast('Exercício removido do rascunho.', 'info');
+      },
+    });
   },
 
   moveExercise(index, direction) {
     const target = index + direction;
     if (target < 0 || target >= App.state.workoutDraft.length) return;
-
     const draft = App.state.workoutDraft;
     [draft[index], draft[target]] = [draft[target], draft[index]];
     this.renderDraft();
@@ -523,10 +533,16 @@ App.views.trainer = {
     const count = document.getElementById('draft-count');
 
     if (count) count.textContent = App.state.workoutDraft.length;
+    this._renderSelectionBar();
+
     if (!el) return;
 
     if (!App.state.workoutDraft.length) {
-      el.innerHTML = `<p class="empty-text">Nenhum exercício selecionado.</p>`;
+      el.innerHTML = App.utils.emptyState({
+        icon: 'plus',
+        title: 'Nenhum exercício selecionado',
+        text: 'Monte uma sequência equilibrada para depois ajustar séries, repetições e descanso.',
+      });
       return;
     }
 
@@ -536,7 +552,12 @@ App.views.trainer = {
           <div class="draft-item">
             <div class="draft-item-top">
               <div>
-                <strong>${App.utils.esc(ex.nome)}</strong>
+                <div class="exercise-title-inline">
+                  <strong>${App.utils.esc(ex.nome)}</strong>
+                  <button class="btn-video-inline" type="button" onclick='event.stopPropagation(); App.utils.openExerciseVideo(${JSON.stringify(ex.nome)})'>
+                    ${App.icons.get('play-circle', 13)} Ver Execução
+                  </button>
+                </div>
                 <div class="draft-item-meta">
                   ${App.utils.esc(ex.grupo_muscular || '')}
                   ${ex.tipo ? ` · ${App.utils.esc(App.EXERCISE_TYPES[ex.tipo] || ex.tipo)}` : ''}
@@ -559,31 +580,15 @@ App.views.trainer = {
             <div class="draft-grid">
               <div class="form-group">
                 <label>Séries</label>
-                <input
-                  class="input-sm"
-                  type="number"
-                  min="1"
-                  value="${ex.series}"
-                  onchange="App.views.trainer.updateDraftField(${i}, 'series', this.value)"
-                >
+                <input class="input-sm" type="number" min="1" value="${ex.series}" onchange="App.views.trainer.updateDraftField(${i}, 'series', this.value)">
               </div>
-
               <div class="form-group">
                 <label>Repetições</label>
-                <input
-                  class="input-sm"
-                  type="text"
-                  value="${App.utils.esc(ex.repeticoes)}"
-                  onchange="App.views.trainer.updateDraftField(${i}, 'repeticoes', this.value)"
-                >
+                <input class="input-sm" type="text" value="${App.utils.esc(ex.repeticoes)}" onchange="App.views.trainer.updateDraftField(${i}, 'repeticoes', this.value)">
               </div>
-
               <div class="form-group">
                 <label>Descanso</label>
-                <select
-                  class="input-sm"
-                  onchange="App.views.trainer.updateDraftField(${i}, 'descanso', this.value)"
-                >
+                <select class="input-sm" onchange="App.views.trainer.updateDraftField(${i}, 'descanso', this.value)">
                   ${App.REST_OPTIONS.map((r) => `<option value="${r}" ${r === ex.descanso ? 'selected' : ''}>${r}</option>`).join('')}
                 </select>
               </div>
@@ -591,11 +596,7 @@ App.views.trainer = {
 
             <div class="form-group" style="margin-bottom:0">
               <label>Observações</label>
-              <textarea
-                class="input-obs"
-                placeholder="Observações opcionais do treinador"
-                onchange="App.views.trainer.updateDraftField(${i}, 'observacoes', this.value)"
-              >${App.utils.esc(ex.observacoes || '')}</textarea>
+              <textarea class="input-obs" placeholder="Observações opcionais do treinador" onchange="App.views.trainer.updateDraftField(${i}, 'observacoes', this.value)">${App.utils.esc(ex.observacoes || '')}</textarea>
             </div>
           </div>
         `
@@ -626,14 +627,7 @@ App.views.trainer = {
     App.utils.setBtnLoading('btn-save-treino', true);
 
     try {
-      const treino = await App.data.criarTreino(
-        App.state.user.id,
-        alunoId,
-        nome,
-        descricao,
-        App.state.workoutDraft
-      );
-
+      const treino = await App.data.criarTreino(App.state.user.id, alunoId, nome, descricao, App.state.workoutDraft);
       if (!treino) {
         App.utils.toast('Erro ao salvar treino.', 'error');
         return;
@@ -649,11 +643,6 @@ App.views.trainer = {
   },
 };
 
-/* =================================================================
-   MODAL MANAGER
-   -----------------------------------------------------------------
-   Gerenciador central de modais, compatível com index.html e app.js
-   ================================================================= */
 App.modal = {
   _currentSave: null,
 
@@ -662,14 +651,11 @@ App.modal = {
     if (!el) return;
 
     this._currentSave = onSave || null;
-
     const titleEl = el.querySelector('.modal-title');
     if (titleEl) titleEl.textContent = title || '';
 
     const card = el.querySelector('.modal-card');
-    if (card) {
-      card.classList.toggle('modal-wide', !!opts.wide);
-    }
+    if (card) card.classList.toggle('modal-wide', !!opts.wide);
 
     el.classList.remove('hidden');
     el.setAttribute('aria-hidden', 'false');
@@ -686,13 +672,14 @@ App.modal = {
       m.setAttribute('aria-hidden', 'true');
     });
 
+    const frame = document.getElementById('exercise-video-frame');
+    if (frame) frame.src = 'about:blank';
+
     document.body.style.overflow = '';
     this._currentSave = null;
   },
 
   save() {
-    if (typeof this._currentSave === 'function') {
-      this._currentSave();
-    }
+    if (typeof this._currentSave === 'function') this._currentSave();
   },
 };

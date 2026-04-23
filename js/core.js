@@ -155,6 +155,81 @@ App.utils = {
       t = setTimeout(() => fn(...args), ms);
     };
   },
+
+  renderIcon(id, icon, size = 18, color = 'currentColor') {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = App.icons.get(icon, size, color);
+  },
+
+  skeleton(lines = 3, className = '') {
+    return `
+      <div class="skeleton-block ${className}">
+        ${Array.from({ length: lines }, (_, i) => `<div class="skeleton-line skeleton-line-${i + 1}"></div>`).join('')}
+      </div>
+    `;
+  },
+
+  emptyState({ icon = 'info', title = 'Nada por aqui ainda', text = 'Assim que houver dados, eles aparecerão aqui.' } = {}) {
+    return `
+      <div class="empty-state">
+        <div class="empty-icon">${App.icons.get(icon, 40)}</div>
+        <h3>${this.esc(title)}</h3>
+        <p>${this.esc(text)}</p>
+      </div>
+    `;
+  },
+
+  confirm({
+    title = 'Confirmar ação',
+    message = 'Tem certeza de que deseja continuar?',
+    confirmText = 'Confirmar',
+    confirmClass = 'btn-primary',
+    onConfirm = null,
+  } = {}) {
+    const content = document.getElementById('modal-confirm-content');
+    const actionBtn = document.getElementById('modal-confirm-action');
+
+    if (content) {
+      content.innerHTML = `
+        <div class="confirm-copy">
+          <div class="confirm-icon">${App.icons.get('alert-triangle', 22, 'var(--warning)')}</div>
+          <div>
+            <p class="confirm-title">${this.esc(title)}</p>
+            <p class="confirm-text">${this.esc(message)}</p>
+          </div>
+        </div>
+      `;
+    }
+
+    if (actionBtn) {
+      actionBtn.textContent = confirmText;
+      actionBtn.className = `btn ${confirmClass}`;
+    }
+
+    App.modal.open('modal-confirm', title, () => {
+      App.modal.close();
+      if (typeof onConfirm === 'function') onConfirm();
+    });
+  },
+
+  youtubeEmbedUrl(query) {
+    const term = encodeURIComponent(String(query || '').trim());
+    return `https://www.youtube-nocookie.com/embed?listType=search&list=${term}`;
+  },
+
+  openExerciseVideo(exerciseName) {
+    const frame = document.getElementById('exercise-video-frame');
+    if (frame) frame.src = this.youtubeEmbedUrl(`${exerciseName} execução correta musculação`);
+    App.modal.open('modal-video', `Execução: ${exerciseName}`);
+  },
+
+  destroyChart(key) {
+    const chart = App.state.charts?.[key];
+    if (chart) {
+      chart.destroy();
+      delete App.state.charts[key];
+    }
+  },
 };
 
 /* =================================================================
@@ -292,9 +367,9 @@ App.data = {
     const row = { ...entry, user_id: uid };
 
     /* Cache local */
-    const cache = App.ls('history') || [];
+    const cache = App.ls(`history_${uid}`) || App.ls('history') || [];
     cache.unshift(row);
-    App.ls('history', cache.slice(0, 500));
+    App.ls(`history_${uid}`, cache.slice(0, 500));
 
     if (App.USE_SUPABASE && App.state.sb) {
       const { error } = await App.state.sb.from('historico_treino').insert({
@@ -325,12 +400,12 @@ App.data = {
         .limit(200);
 
       if (!error && data) {
-        App.ls('history', data);
+        App.ls(`history_${userId}`, data);
         return data;
       }
     }
 
-    return App.ls('history') || [];
+    return App.ls(`history_${userId}`) || App.ls('history') || [];
   },
 
   /* ===============================================================
@@ -604,6 +679,29 @@ App.data = {
     }
 
     return { ok: true, aluno: profile };
+  },
+
+  getPremiumOverrides() {
+    return App.ls('premium_overrides') || {};
+  },
+
+  isAlunoPremium(alunoId, fallbackPlan = 'free') {
+    const overrides = this.getPremiumOverrides();
+    return Boolean(overrides[alunoId]) || fallbackPlan === 'premium';
+  },
+
+  setAlunoPremium(alunoId, enabled) {
+    const overrides = this.getPremiumOverrides();
+
+    if (enabled) {
+      overrides[alunoId] = true;
+    } else {
+      delete overrides[alunoId];
+    }
+
+    App.ls('premium_overrides', overrides);
+
+    return enabled ? 'premium' : 'free';
   },
 };
 
@@ -917,7 +1015,7 @@ App.auth = {
   },
 
   isPremium() {
-    return App.state.user?.plan_type === 'premium';
+    return App.data.isAlunoPremium(App.state.user?.id, App.state.user?.plan_type);
   },
 
   isTrainer() {

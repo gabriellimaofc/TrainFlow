@@ -106,6 +106,7 @@ App.state = {
   selectedAluno: null,
   exerciseList: [],
   workoutDraft: [],
+  charts: {},
 };
 
 /* ================================================================
