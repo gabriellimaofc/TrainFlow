@@ -274,6 +274,25 @@ App.utils = {
       .toLowerCase();
   },
 
+  /* Normaliza grupos para filtros e agrupamentos sem quebrar o cadastro atual. */
+  normalizeMuscleGroup(group) {
+    if (!group) return 'Geral';
+    if (group === 'Glúteos') return 'Pernas';
+    return group;
+  },
+
+  /* Centraliza o label do tipo para manter student e trainer consistentes. */
+  getExerciseTypeLabel(type) {
+    return App.EXERCISE_TYPES[type] || type || '—';
+  },
+
+  /* Protege links externos antes de renderizar ou abrir em nova aba. */
+  sanitizeUrl(url) {
+    const value = String(url || '').trim();
+    if (!value) return '';
+    return /^https?:\/\//i.test(value) ? value : '';
+  },
+
   resolveExerciseVideoQuery(exerciseName) {
     const normalized = this.normalizeSearchTerm(exerciseName);
     const direct = this.EXERCISE_VIDEO_QUERIES[normalized];
@@ -297,9 +316,23 @@ App.utils = {
     return `${normalized} execucao correta musculacao`;
   },
 
-  openExerciseVideo(exerciseName) {
-    const query = this.resolveExerciseVideoQuery(exerciseName);
-    window.open(this.youtubeSearchUrl(query), '_blank', 'noopener,noreferrer');
+  /* Resolve a URL do vídeo com prioridade para o valor salvo no banco. */
+  resolveExerciseVideoUrl(exercise) {
+    if (typeof exercise === 'object' && exercise) {
+      const directUrl = this.sanitizeUrl(exercise.video_url);
+      if (directUrl) return directUrl;
+      return this.youtubeSearchUrl(this.resolveExerciseVideoQuery(exercise.nome));
+    }
+
+    const directUrl = this.sanitizeUrl(exercise);
+    if (directUrl) return directUrl;
+    return this.youtubeSearchUrl(this.resolveExerciseVideoQuery(exercise));
+  },
+
+  openExerciseVideo(exercise) {
+    const targetUrl = this.resolveExerciseVideoUrl(exercise);
+    if (!targetUrl) return;
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
   },
 
   destroyChart(key) {

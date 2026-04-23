@@ -643,6 +643,287 @@ App.views.trainer = {
   },
 };
 
+/* -----------------------------------------------------------------
+   Complementos da área do treinador para seleção mais rica e segura.
+   ----------------------------------------------------------------- */
+App.views.trainer._exerciseGroups = ['Todos', 'Peito', 'Costas', 'Pernas', 'Glúteos', 'Ombro', 'Bíceps', 'Tríceps', 'Core', 'Cardio'];
+
+App.views.trainer.renderCriarTreino = async function renderCriarTreino(alunoId) {
+  App.state.selectedAluno = alunoId || null;
+  App.state.workoutDraft = [];
+  this._exerciseSearch = '';
+  this._exerciseGroup = '';
+
+  const alunos = this._alunosCache.length ? this._alunosCache : await App.data.getAlunosDoTreinador(App.state.user?.id);
+  this._alunosCache = alunos || [];
+
+  const alunoSelect = document.getElementById('treino-aluno-select');
+  if (alunoSelect) {
+    alunoSelect.innerHTML =
+      `<option value="">Selecione o aluno...</option>` +
+      this._alunosCache
+        .map((row) => {
+          const al = row.aluno || row;
+          return `<option value="${al.id}" ${al.id === alunoId ? 'selected' : ''}>${App.utils.esc(al.nome)}</option>`;
+        })
+        .join('');
+  }
+
+  const lib = document.getElementById('exercise-library');
+  if (lib) {
+    lib.innerHTML = `
+      <div class="exercise-selector-shell">
+        <div class="exercise-selector-toolbar">
+          <div class="search-field exercise-search-field">
+            <span class="search-icon">${App.icons.get('search', 16)}</span>
+            <input type="search" id="exercise-search" placeholder="Buscar exercício, grupo, equipamento..." aria-label="Buscar exercício">
+          </div>
+          <div class="science-chip-row compact trainer-filter-row" id="exercise-group-chips">
+            ${this._exerciseGroups
+              .map((group) => `
+                <button class="filter-chip ${group === 'Todos' ? 'active' : ''}" type="button" onclick="App.views.trainer.setExerciseGroup('${group}')">
+                  ${group === 'Todos' ? App.icons.get('filter', 14) : App.icons.get(this._iconForGroup(group), 14)}
+                  ${group}
+                </button>
+              `)
+              .join('')}
+          </div>
+        </div>
+        <div id="exercise-selection-bar"></div>
+        <div id="exercise-library-results">${App.utils.skeleton(6, 'skeleton-grid')}</div>
+      </div>
+    `;
+  }
+
+  const draft = document.getElementById('treino-draft');
+  if (draft) {
+    draft.innerHTML = App.utils.emptyState({
+      icon: 'plus',
+      title: 'Nenhum exercício selecionado',
+      text: 'Escolha exercícios na biblioteca para começar a montar o treino.',
+    });
+  }
+
+  const exercicios = await App.data.getExercicios();
+  this._bindExerciseSearch(exercicios);
+  this._renderExerciseLibrary(exercicios);
+  this.renderDraft();
+};
+
+App.views.trainer.setExerciseGroup = function setExerciseGroup(group) {
+  this._exerciseGroup = group === 'Todos' ? '' : group;
+  document.querySelectorAll('#exercise-group-chips .filter-chip').forEach((chip) => {
+    chip.classList.toggle('active', chip.textContent.trim().includes(group));
+  });
+  this._renderExerciseLibrary(App.state.exerciseList || []);
+};
+
+App.views.trainer._renderExerciseLibrary = function _renderExerciseLibrary(exercicios) {
+  const resultsEl = document.getElementById('exercise-library-results');
+  if (!resultsEl) return;
+
+  const q = (this._exerciseSearch || '').trim().toLowerCase();
+  const group = this._exerciseGroup || '';
+
+  const filtered = (exercicios || []).filter((ex) => {
+    const rawGroup = ex.grupo_muscular || '';
+    const normalizedGroup = App.utils.normalizeMuscleGroup(rawGroup);
+    const haystack = [
+      ex.nome,
+      rawGroup,
+      normalizedGroup,
+      ex.execucao,
+      ex.equipamento,
+      ex.observacao_cientifica,
+    ].join(' ').toLowerCase();
+    const matchQuery = !q || haystack.includes(q);
+    const matchGroup = !group || rawGroup === group || normalizedGroup === group;
+    return matchQuery && matchGroup;
+  });
+
+  this._renderSelectionBar();
+
+  if (!filtered.length) {
+    resultsEl.innerHTML = App.utils.emptyState({
+      icon: 'search',
+      title: 'Nenhum exercício encontrado',
+      text: 'Ajuste a busca ou troque o grupo muscular para explorar novas opções.',
+    });
+    return;
+  }
+
+  resultsEl.innerHTML = `<div class="exercise-card-grid">${filtered.map((ex) => this._buildExerciseGridCard(ex)).join('')}</div>`;
+};
+
+App.views.trainer._buildExerciseGridCard = function _buildExerciseGridCard(ex) {
+  const selected = App.state.workoutDraft.some((item) => item.exercicio_id === ex.id);
+  const group = App.utils.normalizeMuscleGroup(ex.grupo_muscular);
+  const tipPreview = (ex.execucao || 'Execução guiada e amplitude controlada.').trim();
+  const typeLabel = App.utils.getExerciseTypeLabel(ex.tipo);
+
+  return `
+    <button
+      class="exercise-grid-card ${selected ? 'selected' : ''}"
+      type="button"
+      onclick="App.views.trainer.addExerciseToDraft(${ex.id})"
+      aria-pressed="${selected ? 'true' : 'false'}"
+    >
+      <span class="exercise-grid-check">${selected ? App.icons.get('check-circle', 16) : ''}</span>
+
+      <div class="exercise-grid-top">
+        <span class="exercise-grid-icon">${App.icons.get(this._iconForGroup(ex.grupo_muscular), 16)}</span>
+        <div class="exercise-grid-badges">
+          <span class="badge-sm badge-type">${App.utils.esc(typeLabel)}</span>
+          ${ex.video_url ? `<span class="badge-sm badge-video">${App.icons.get('play-circle', 12)} vídeo</span>` : ''}
+        </div>
+      </div>
+
+      <div class="exercise-grid-name-row">
+        <div class="exercise-grid-name">${App.utils.esc(ex.nome)}</div>
+      </div>
+      <div class="exercise-grid-group">${App.utils.esc(group || 'Geral')}</div>
+
+      <p class="exercise-grid-tip">${App.utils.esc(tipPreview)}</p>
+
+      <div class="exercise-grid-footer">
+        ${ex.equipamento ? `<span class="exercise-grid-footer-item">${App.icons.get('gauge', 12)} ${App.utils.esc(ex.equipamento)}</span>` : ''}
+        ${ex.observacao_cientifica ? `<span class="exercise-grid-footer-item">${App.icons.get('book-open', 12)} nota técnica</span>` : ''}
+      </div>
+    </button>
+  `;
+};
+
+App.views.trainer._renderSelectionBar = function _renderSelectionBar() {
+  const bar = document.getElementById('exercise-selection-bar');
+  if (!bar) return;
+
+  const count = App.state.workoutDraft.length;
+  bar.innerHTML = `
+    <div class="selection-bar">
+      <div class="selection-bar-copy">
+        <strong>${count} exercício${count === 1 ? '' : 's'} selecionado${count === 1 ? '' : 's'}</strong>
+        <span>${count ? 'Seu rascunho já está pronto para ajustes finos.' : 'Selecione exercícios para começar o treino.'}</span>
+      </div>
+      <button class="btn btn-primary btn-sm" type="button" onclick="App.views.trainer.scrollToDraft()" ${count ? '' : 'disabled'}>
+        ${App.icons.get('check-circle', 14)} Continuar
+      </button>
+    </div>
+  `;
+};
+
+App.views.trainer.addExerciseToDraft = function addExerciseToDraft(exercicioId) {
+  const ex = (App.state.exerciseList || []).find((item) => item.id === exercicioId);
+  if (!ex) return;
+
+  const alreadySelected = App.state.workoutDraft.some((item) => item.exercicio_id === ex.id);
+  if (alreadySelected) {
+    App.utils.toast(`${ex.nome} já está no rascunho.`, 'info', 1800);
+    this.scrollToDraft();
+    return;
+  }
+
+  App.state.workoutDraft.push({
+    exercicio_id: ex.id,
+    nome: ex.nome,
+    grupo_muscular: ex.grupo_muscular,
+    tipo: ex.tipo,
+    execucao: ex.execucao || '',
+    equipamento: ex.equipamento || '',
+    observacao_cientifica: ex.observacao_cientifica || '',
+    video_url: ex.video_url || '',
+    series: 3,
+    repeticoes: '8-12',
+    descanso: '60s',
+    observacoes: '',
+  });
+
+  this.renderDraft();
+  this._renderExerciseLibrary(App.state.exerciseList || []);
+  App.utils.toast(`${ex.nome} adicionado ao treino.`, 'success', 1800);
+};
+
+App.views.trainer.renderDraft = function renderDraft() {
+  const el = document.getElementById('treino-draft');
+  const count = document.getElementById('draft-count');
+
+  if (count) count.textContent = App.state.workoutDraft.length;
+  this._renderSelectionBar();
+
+  if (!el) return;
+
+  if (!App.state.workoutDraft.length) {
+    el.innerHTML = App.utils.emptyState({
+      icon: 'plus',
+      title: 'Nenhum exercício selecionado',
+      text: 'Monte uma sequência equilibrada para depois ajustar séries, repetições e descanso.',
+    });
+    return;
+  }
+
+  el.innerHTML = App.state.workoutDraft
+    .map((ex, i) => `
+      <div class="draft-item">
+        <div class="draft-item-top">
+          <div class="draft-item-main">
+            <div class="exercise-title-inline">
+              <strong>${App.utils.esc(ex.nome)}</strong>
+              ${ex.video_url ? `
+                <a class="btn-video-inline" href="${App.utils.esc(App.utils.sanitizeUrl(ex.video_url))}" target="_blank" rel="noopener noreferrer">
+                  ${App.icons.get('play-circle', 13)} Ver execução
+                </a>
+              ` : ''}
+            </div>
+            <div class="draft-item-meta">
+              ${App.utils.esc(App.utils.normalizeMuscleGroup(ex.grupo_muscular || ''))}
+              ${ex.tipo ? ` · ${App.utils.esc(App.utils.getExerciseTypeLabel(ex.tipo))}` : ''}
+            </div>
+            ${ex.execucao ? `<p class="draft-item-tip">${App.utils.esc(ex.execucao)}</p>` : ''}
+          </div>
+
+          <div class="draft-actions">
+            <button class="btn-icon-sm" onclick="App.views.trainer.moveExercise(${i}, -1)" aria-label="Mover para cima">
+              ${App.icons.get('chevron-up', 14)}
+            </button>
+            <button class="btn-icon-sm" onclick="App.views.trainer.moveExercise(${i}, 1)" aria-label="Mover para baixo">
+              ${App.icons.get('chevron-down', 14)}
+            </button>
+            <button class="btn-icon-sm" onclick="App.views.trainer.removeExerciseFromDraft(${i})" aria-label="Remover exercício">
+              ${App.icons.get('x', 14)}
+            </button>
+          </div>
+        </div>
+
+        <div class="draft-helper-row">
+          ${ex.equipamento ? `<span class="exercise-grid-footer-item">${App.icons.get('gauge', 12)} ${App.utils.esc(ex.equipamento)}</span>` : ''}
+          ${ex.observacao_cientifica ? `<span class="exercise-grid-footer-item">${App.icons.get('book-open', 12)} nota científica</span>` : ''}
+        </div>
+
+        <div class="draft-grid">
+          <div class="form-group">
+            <label>Séries</label>
+            <input class="input-sm" type="number" min="1" value="${ex.series}" onchange="App.views.trainer.updateDraftField(${i}, 'series', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Repetições</label>
+            <input class="input-sm" type="text" value="${App.utils.esc(ex.repeticoes)}" onchange="App.views.trainer.updateDraftField(${i}, 'repeticoes', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Descanso</label>
+            <select class="input-sm" onchange="App.views.trainer.updateDraftField(${i}, 'descanso', this.value)">
+              ${App.REST_OPTIONS.map((r) => `<option value="${r}" ${r === ex.descanso ? 'selected' : ''}>${r}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0">
+          <label>Observações</label>
+          <textarea class="input-obs" placeholder="Observações opcionais do treinador" onchange="App.views.trainer.updateDraftField(${i}, 'observacoes', this.value)">${App.utils.esc(ex.observacoes || '')}</textarea>
+        </div>
+      </div>
+    `)
+    .join('');
+};
+
 App.modal = {
   _currentSave: null,
 

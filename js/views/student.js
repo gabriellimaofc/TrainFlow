@@ -114,6 +114,24 @@ const metodosAvancados = [
   },
 ];
 
+const treinoQuickGuides = [
+  {
+    titulo: 'RIR prático',
+    icone: 'target',
+    texto: 'Na maior parte do bloco, termine os sets principais com cerca de 1–2 reps sobrando. Falha frequente costuma ficar melhor reservada para isoladores e momentos pontuais.',
+  },
+  {
+    titulo: 'Progressão dupla',
+    icone: 'trending-up',
+    texto: 'Primeiro feche a faixa de repetições com técnica boa. Quando todas as séries alcançarem o topo da faixa, aumente a carga no treino seguinte.',
+  },
+  {
+    titulo: 'Deload',
+    icone: 'gauge',
+    texto: 'Quando a fadiga acumular, reduza volume por cerca de uma semana e mantenha os movimentos limpos. Recuperar bem costuma melhorar a próxima fase.',
+  },
+];
+
 const limiares = [
   {
     sigla: 'MEV',
@@ -225,6 +243,21 @@ const periodizacaoVolume = [
     intensidade: 'RIR 4+',
     objetivo: 'Recuperação e supracompensação',
     metodos: 'Séries normais leves',
+  },
+];
+
+const cardioQuickReferences = [
+  {
+    nome: 'LISS',
+    icone: 'activity',
+    dose: '25–45 min',
+    texto: 'Cardio contínuo leve a moderado. Funciona bem para aumentar gasto calórico e condicionamento com pouca interferência na musculação.',
+  },
+  {
+    nome: 'HIIT',
+    icone: 'zap',
+    dose: '10–20 min',
+    texto: 'Tiros intensos com pausas ativas. É eficiente, mas costuma cobrar mais recuperação, então vale dosar perto de treinos pesados de pernas.',
   },
 ];
 
@@ -2061,4 +2094,279 @@ App.views.student = {
       </div>
     `;
   },
+};
+
+/* -----------------------------------------------------------------
+   Complementos da área do aluno para treino enriquecido e conteúdo
+   prático sem quebrar a estrutura original do arquivo.
+   ----------------------------------------------------------------- */
+App.views.student.renderTreino = async function renderTreino() {
+  const el = document.getElementById('treino-content');
+  if (!el) return;
+
+  const treino = App.state.workout;
+
+  if (!treino) {
+    el.innerHTML = `
+      <div class="empty-state large">
+        <div class="empty-icon">${App.icons.get('dumbbell', 48)}</div>
+        <h2>Sem treino atribuído</h2>
+        <p>Seu treinador ainda não criou um treino para você. Quando houver um treino ativo, ele aparecerá aqui automaticamente.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const exercicios = (treino.treino_exercicios || []).sort((a, b) => a.ordem - b.ordem);
+
+  el.innerHTML = `
+    <div class="treino-header">
+      <div class="treino-title-block">
+        <h2>${App.utils.esc(treino.nome)}</h2>
+        ${treino.descricao ? `<p class="treino-desc">${App.utils.esc(treino.descricao)}</p>` : ''}
+      </div>
+      <div class="treino-meta">
+        <span class="badge badge-primary">${App.icons.get('dumbbell', 13)} ${exercicios.length} exercícios</span>
+        <span class="badge badge-neutral">${App.icons.get('calendar', 13)} ${App.utils.fmtDate((treino.updated_at || treino.created_at || '').split('T')[0] || (treino.updated_at || treino.created_at))}</span>
+      </div>
+    </div>
+
+    <div class="exercise-quick-guide-grid">
+      ${treinoQuickGuides.map((item) => `
+        <article class="exercise-quick-guide">
+          <div class="exercise-quick-guide-head">
+            <span class="exercise-quick-guide-icon">${App.icons.get(item.icone, 16)}</span>
+            <strong>${App.utils.esc(item.titulo)}</strong>
+          </div>
+          <p>${App.utils.esc(item.texto)}</p>
+        </article>
+      `).join('')}
+    </div>
+
+    <div class="exercise-list">
+      ${exercicios.length ? exercicios.map((te, i) => this._buildExerciseCard(te, i)).join('') : `<p class="empty-text">Nenhum exercício adicionado ainda.</p>`}
+    </div>
+  `;
+};
+
+App.views.student._buildExerciseCard = function _buildExerciseCard(te, idx) {
+  const ex = te.exercicios || {};
+  const typeLabel = App.utils.getExerciseTypeLabel(ex.tipo);
+  const normalizedGroup = App.utils.normalizeMuscleGroup(ex.grupo_muscular);
+  const videoUrl = App.utils.sanitizeUrl(ex.video_url);
+  const scientificNote = ex.observacao_cientifica || '';
+
+  return `
+    <div class="exercise-card" id="ex-card-${te.id}">
+      <div class="ex-card-header" onclick="App.views.student._toggleExCard(${te.id})">
+        <div class="ex-card-left">
+          <span class="ex-num">${idx + 1}</span>
+          <div>
+            <div class="exercise-title-inline">
+              <div class="ex-name">${App.utils.esc(ex.nome || 'Exercício')}</div>
+              ${videoUrl ? `
+                <a
+                  class="btn-video-inline"
+                  href="${App.utils.esc(videoUrl)}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onclick="event.stopPropagation()"
+                >
+                  ${App.icons.get('play-circle', 13)} Ver execução
+                </a>
+              ` : ''}
+            </div>
+            <div class="ex-meta">
+              <span class="badge-sm badge-muscle">${App.utils.esc(normalizedGroup)}</span>
+              <span class="badge-sm badge-type">${App.utils.esc(typeLabel)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="ex-card-right">
+          <div class="ex-sets">${te.series}×${App.utils.esc(te.repeticoes)}</div>
+          <span class="ex-expand-icon" id="ex-icon-${te.id}">
+            ${App.icons.get('chevron-down', 16)}
+          </span>
+        </div>
+      </div>
+
+      <div class="ex-card-body hidden" id="ex-body-${te.id}">
+        <div class="ex-details-grid">
+          <div class="ex-detail-item">
+            <div class="ex-detail-label">Grupo muscular</div>
+            <div class="ex-detail-val">${App.utils.esc(normalizedGroup)}</div>
+          </div>
+
+          <div class="ex-detail-item">
+            <div class="ex-detail-label">Tipo</div>
+            <div class="ex-detail-val">${App.utils.esc(typeLabel)}</div>
+          </div>
+
+          <div class="ex-detail-item">
+            <div class="ex-detail-label">Séries</div>
+            <div class="ex-detail-val">${te.series}</div>
+          </div>
+
+          <div class="ex-detail-item">
+            <div class="ex-detail-label">Repetições</div>
+            <div class="ex-detail-val">${App.utils.esc(te.repeticoes)}</div>
+          </div>
+
+          <div class="ex-detail-item">
+            <div class="ex-detail-label">Descanso</div>
+            <div class="ex-detail-val">${App.utils.esc(te.descanso || '60s')}</div>
+          </div>
+
+          ${te.observacoes ? `
+            <div class="ex-detail-item ex-detail-wide">
+              <div class="ex-detail-label">Observações do treinador</div>
+              <div class="ex-detail-val">${App.utils.esc(te.observacoes)}</div>
+            </div>
+          ` : ''}
+        </div>
+
+        ${ex.execucao ? `
+          <div class="exercise-note-card">
+            <div class="exercise-note-head">
+              <span class="exercise-note-icon">${App.icons.get('activity', 14)}</span>
+              <strong>Dica de execução</strong>
+            </div>
+            <p>${App.utils.esc(ex.execucao)}</p>
+          </div>
+        ` : ''}
+
+        ${ex.equipamento ? `
+          <div class="exercise-note-card">
+            <div class="exercise-note-head">
+              <span class="exercise-note-icon">${App.icons.get('gauge', 14)}</span>
+              <strong>Equipamento</strong>
+            </div>
+            <p>${App.utils.esc(ex.equipamento)}</p>
+          </div>
+        ` : ''}
+
+        ${scientificNote ? `
+          <div class="exercise-note-card scientific">
+            <div class="exercise-note-head">
+              <span class="exercise-note-icon">${App.icons.get('book-open', 14)}</span>
+              <strong>Observação científica</strong>
+            </div>
+            <p>${App.utils.esc(scientificNote)}</p>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+};
+
+App.views.student._renderScienceExercises = function _renderScienceExercises(exercicios) {
+  const groups = ['Todos', 'Peito', 'Costas', 'Pernas', 'Ombro', 'Bíceps', 'Tríceps', 'Core', 'Cardio'];
+  const q = this._scienceExerciseSearch.trim().toLowerCase();
+  const filtered = exercicios.filter((ex) => {
+    const group = App.utils.normalizeMuscleGroup(ex.grupo_muscular);
+    const haystack = [
+      ex.nome,
+      ex.execucao,
+      ex.equipamento,
+      ex.observacao_cientifica,
+    ].join(' ').toLowerCase();
+    const matchQuery = !q || haystack.includes(q);
+    const matchGroup = this._scienceExerciseGroup === 'Todos' || group === this._scienceExerciseGroup;
+    return matchQuery && matchGroup;
+  });
+
+  return `
+    <div class="section-card">
+      <div class="section-header">
+        <div>
+          <div class="section-label">Exercícios</div>
+          <h3>Biblioteca prática para técnica e escolha inteligente</h3>
+        </div>
+        <span class="badge badge-neutral">${filtered.length} resultados</span>
+      </div>
+      <div class="science-toolbar">
+        <div class="search-field">
+          <span class="search-icon">${App.icons.get('search', 16)}</span>
+          <input type="search" id="science-exercise-search" value="${App.utils.esc(this._scienceExerciseSearch)}" placeholder="Buscar exercício, execução ou observação">
+        </div>
+        <div class="science-chip-row">
+          ${groups.map((group) => `
+            <button class="filter-chip ${this._scienceExerciseGroup === group ? 'active' : ''}" type="button" onclick="App.views.student.setScienceExerciseGroup('${group}')">
+              ${group}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+      <div class="science-grid exercise-reference-grid">
+        ${filtered.length ? filtered.slice(0, 24).map((ex) => `
+          <article class="exercise-reference-card">
+            <div class="exercise-reference-top">
+              <span class="exercise-reference-icon">${App.icons.get(this._exerciseIcon(ex.grupo_muscular), 16)}</span>
+              <span class="badge-sm badge-type">${App.utils.esc(App.utils.getExerciseTypeLabel(ex.tipo))}</span>
+            </div>
+            <h4>${App.utils.esc(ex.nome)}</h4>
+            <div class="exercise-reference-badges">
+              <div class="badge-sm badge-muscle">${App.utils.esc(App.utils.normalizeMuscleGroup(ex.grupo_muscular))}</div>
+              ${ex.video_url ? `<div class="badge-sm badge-neutral">${App.icons.get('play-circle', 12)} vídeo</div>` : ''}
+            </div>
+            <p>${App.utils.esc(ex.execucao || 'Mantenha amplitude controlada, técnica consistente e proximidade adequada da falha.')}</p>
+            ${ex.observacao_cientifica ? `<div class="science-note-inline">${App.icons.get('book-open', 13)} ${App.utils.esc(ex.observacao_cientifica)}</div>` : ''}
+            ${ex.equipamento ? `<div class="exercise-reference-equip">${App.icons.get('gauge', 13)} ${App.utils.esc(ex.equipamento)}</div>` : ''}
+          </article>
+        `).join('') : App.utils.emptyState({ icon: 'search', title: 'Nenhum exercício encontrado', text: 'Ajuste a busca ou troque o grupo muscular para ampliar a biblioteca.' })}
+      </div>
+    </div>
+  `;
+};
+
+App.views.student._renderScienceCardioSummary = function _renderScienceCardioSummary() {
+  return `
+    <div class="science-stack">
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <div class="section-label">Cardio</div>
+            <h3>Modalidades, gasto e indicação prática</h3>
+          </div>
+          <button class="btn btn-secondary btn-sm" type="button" onclick="App.boot.navigateTo('cardio')">
+            ${App.icons.get('activity', 15)} Abrir guia completa
+          </button>
+        </div>
+        <div class="science-grid cardio-summary-grid">
+          ${modalidadesCardio.slice(0, 4).map((item) => `
+            <article class="cardio-mini-card">
+              <div class="cardio-mini-head">
+                <span>${App.icons.get(item.icone, 16)}</span>
+                <h4>${item.nome}</h4>
+              </div>
+              <p>${item.indicado}</p>
+              <div class="cardio-mini-meta">${item.calorias} · ${item.duracao}</div>
+            </article>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header">
+          <div>
+            <div class="section-label">Referência rápida</div>
+            <h3>LISS e HIIT sem complicação</h3>
+          </div>
+        </div>
+        <div class="science-grid cardio-summary-grid">
+          ${cardioQuickReferences.map((item) => `
+            <article class="cardio-mini-card">
+              <div class="cardio-mini-head">
+                <span>${App.icons.get(item.icone, 16)}</span>
+                <h4>${item.nome}</h4>
+              </div>
+              <div class="badge badge-neutral">${item.dose}</div>
+              <p>${item.texto}</p>
+            </article>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
 };
