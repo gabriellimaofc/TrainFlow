@@ -210,4 +210,13 @@ window.saveModal            = () => App.modal.save();
 window.saveTreino           = () => App.views.trainer.saveTreino();
 
 /* ── Inicia quando DOM estiver pronto ─────────────────────────────── */
-document.addEventListener('DOMContentLoaded', () => App.boot.init());
+App.state.sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    this.enterAuth('reset-password');
+    return;
+  }
+
+  if (event === 'SIGNED_OUT') {
+    this.enterAuth('login');
+  }
+});
