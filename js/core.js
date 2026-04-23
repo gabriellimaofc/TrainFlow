@@ -206,24 +206,60 @@ App.data = {
   },
 
   /* Alunos vinculados ao treinador */
-  async getAlunosDoTreinador(treinadorId) {
-    if (!App.USE_SUPABASE || !App.state.sb) return [];
-    const { data } = await App.state.sb.from('treinador_aluno')
-      .select('*, aluno:aluno_id(id, nome, email, plan_type, created_at)')
-      .eq('treinador_id', treinadorId).eq('ativo', true);
-    return data || [];
-  },
+async getAlunosDoTreinador(treinadorId) {
+  if (!App.USE_SUPABASE || !App.state.sb) return [];
 
-  async vincularAluno(treinadorId, alunoEmail) {
-    if (!App.USE_SUPABASE || !App.state.sb) return { error: 'Supabase não configurado.' };
-    const { data: profile, error } = await App.state.sb
-      .from('profiles').select('id, nome, email').eq('email', alunoEmail).single();
-    if (error || !profile) return { error: 'Nenhum aluno encontrado com esse email.' };
-    if (profile.id === treinadorId) return { error: 'Não é possível se vincular a si mesmo.' };
-    await App.state.sb.from('treinador_aluno')
-      .upsert({ treinador_id: treinadorId, aluno_id: profile.id, ativo: true }, { onConflict: 'treinador_id,aluno_id' });
-    return { ok: true, aluno: profile };
-  },
+  const { data, error } = await App.state.sb
+    .from('treinador_aluno')
+    .select(`
+      *,
+      aluno:aluno_id (
+        id,
+        nome,
+        email,
+        role,
+        plan_type,
+        created_at
+      )
+    `)
+    .eq('treinador_id', treinadorId)
+    .eq('ativo', true);
+
+  if (error) {
+    console.error('Erro ao buscar alunos do treinador:', error);
+    return [];
+  }
+
+  return data || [];
+},
+
+ // vincular aluno no treinador
+async vincularAluno(treinadorId, alunoEmail) {
+  if (!App.USE_SUPABASE || !App.state.sb) return { error: 'Supabase não configurado.' };
+
+  const email = alunoEmail.trim().toLowerCase();
+
+  const { data: profile, error } = await App.state.sb
+    .from('profiles')
+    .select('id, nome, email, role, plan_type')
+    .ilike('email', email)
+    .single();
+
+  if (error || !profile) return { error: 'Nenhum aluno encontrado com esse email.' };
+  if (profile.id === treinadorId) return { error: 'Não é possível se vincular a si mesmo.' };
+  if (profile.role !== 'aluno') return { error: 'Esse email não pertence a um aluno.' };
+
+  const { error: linkError } = await App.state.sb
+    .from('treinador_aluno')
+    .upsert(
+      { treinador_id: treinadorId, aluno_id: profile.id, ativo: true },
+      { onConflict: 'treinador_id,aluno_id' }
+    );
+
+  if (linkError) return { error: linkError.message || 'Erro ao criar vínculo.' };
+
+  return { ok: true, aluno: profile };
+},
 
   /* Observações */
   async getObservacoes(alunoId) {
