@@ -1,265 +1,213 @@
-/* ============================================================
-   TrainFlow v2 — js/app.js
-   Boot, estado global, roteador e inicialização da UI.
+/* =================================================================
+   app.js — Boot principal, roteador, estado global
    Carregado por último.
-   ============================================================ */
+   ================================================================= */
 
-// ── Estado global da aplicação ─────────────────────────────
-TF.state = {
-  user:           null,  // { id, nome, email, role, plan_type }
-  currentView:    null,
-  activeWorkout:  null,  // { dayId, logs, completedExercises, startTime }
-  clockInterval:  null,
-  clockSecs:      0,
-  restInterval:   null,
-  restTotal:      90,
-  restRemaining:  90,
-  currentLogId:   null,
-  progressChart:  null,
-  viewingAluno:   null,
-  alunosList:     [],
-};
+App.boot = {
 
-// ── TF.app — Controlador principal ─────────────────────────
-TF.app = {
-
-  /** Inicializa o app ao carregar a página */
+  /* ── Inicialização ──────────────────────────────────────────── */
   async init() {
-    // Inicializa cliente Supabase se configurado
-    if (TF.USE_SUPABASE && window.supabase) {
-      TF.sb = window.supabase.createClient(TF.SUPABASE_URL, TF.SUPABASE_KEY);
+
+    /* Inicializa Supabase */
+    if (App.USE_SUPABASE && window.supabase) {
+      App.state.sb = window.supabase.createClient(App.SUPABASE_URL, App.SUPABASE_KEY);
     }
 
-    // Setup auth form
-    TF.auth.init();
+    /* Inicializa módulo de Auth */
+    App.auth.init();
 
-    // Setup event listeners globais
-    this._setupNavListeners();
-    this._setupKeyboardShortcuts();
+    /* Event listeners globais */
+    this._setupNav();
+    this._setupKeyboard();
     this._setupModalBackdrops();
 
-    // Tenta restaurar sessão
-    if (TF.USE_SUPABASE && TF.sb) {
-      const { data: { session } } = await TF.sb.auth.getSession();
-      if (session) {
-        const profile = await TF.data.getProfile(session.user.id);
-        TF.state.user = { ...session.user, ...profile };
+    /* Verifica se URL tem parâmetro de reset de senha */
+    const hash = window.location.hash;
+    if (hash.includes('access_token') && hash.includes('type=recovery')) {
+      this.enterAuth('reset-password');
+      return;
+    }
+
+    /* Verifica sessão existente */
+    if (App.USE_SUPABASE && App.state.sb) {
+      const { data: { session } } = await App.state.sb.auth.getSession();
+      if (session?.user) {
+        /* Verifica confirmação de email */
+        if (!session.user.email_confirmed_at) {
+          this.enterAuth('login');
+          return;
+        }
+        const profile = await App.data.getProfile(session.user.id);
+        App.state.user = { ...session.user, ...profile };
         this.enterApp();
         return;
       }
-      TF.sb.auth.onAuthStateChange((_e, s) => { if (!s) this.enterAuth(); });
+      App.state.sb.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_OUT') this.enterAuth('login');
+      });
     } else {
-      // Modo demo: tenta restaurar do localStorage
-      const demo = TF.ls('demo_user');
-      if (demo) { TF.state.user = demo; this.enterApp(); return; }
+      const cached = App.ls('current_user');
+      if (cached) { App.state.user = cached; this.enterApp(); return; }
     }
 
-    // Nenhuma sessão — mostra auth
-    this.enterAuth();
+    this.enterAuth('login');
   },
 
-  /** Navega para a tela de auth */
-  enterAuth() {
+  /* ── Entrar na tela de auth ──────────────────────────────────── */
+  enterAuth(panel = 'login') {
     document.getElementById('auth-screen').classList.remove('hidden');
     document.getElementById('app-screen').classList.add('hidden');
-    TF.auth.toggleForm('login');
+    this._showAuthPanel(panel);
   },
 
-  /** Entra no app após autenticação */
-  enterApp() {
+  _showAuthPanel(panel) {
+    ['login','register','forgot','reset-password'].forEach(p => {
+      const el = document.getElementById(`panel-${p}`);
+      if (el) el.classList.toggle('hidden', p !== panel);
+    });
+  },
+
+  /* ── Entrar no app após autenticação ─────────────────────────── */
+  async enterApp() {
     document.getElementById('auth-screen').classList.add('hidden');
     document.getElementById('app-screen').classList.remove('hidden');
-    this._updateUserUI();
+    this.updateUserUI();
     this._buildNav();
-    this.navigateTo(TF.auth.isTrainer() ? 'trainer-dashboard' : 'dashboard');
+
+    /* Pré-carrega treino do aluno */
+    if (!App.auth.isTrainer()) {
+      App.state.workout = await App.data.getTreinoAtivo(App.state.user.id);
+    }
+
+    this.navigateTo(App.auth.isTrainer() ? 'trainer-dashboard' : 'dashboard');
   },
 
-  /** Atualiza UI com dados do usuário */
-  _updateUserUI() {
-    const u       = TF.state.user;
+  /* ── Atualiza UI com dados do usuário ────────────────────────── */
+  updateUserUI() {
+    const u = App.state.user;
     const nome    = u?.nome || 'Usuário';
-    const initial = nome[0].toUpperCase();
-    const role    = TF.auth.isTrainer() ? '🏋️ Treinador' : 'Aluno · ' + (u?.plan_type||'free');
-
+    const initial = App.utils.initial(nome);
+    const role    = App.auth.isTrainer() ? 'Treinador' : `Aluno · ${u?.plan_type||'free'}`;
     document.querySelectorAll('.user-avatar').forEach(el => el.textContent = initial);
-    document.querySelectorAll('.user-name-text').forEach(el => el.textContent = nome);
-    document.querySelectorAll('.user-role-text').forEach(el => el.textContent = role);
+    document.querySelectorAll('.user-name-display').forEach(el => el.textContent = nome);
+    document.querySelectorAll('.user-role-display').forEach(el => el.textContent = role);
   },
 
-  /** Constrói navegação baseada no role */
+  /* ── Constrói navegação baseada no role ──────────────────────── */
   _buildNav() {
-    const isTrainer = TF.auth.isTrainer();
-    const sidebarNav = document.getElementById('sidebar-nav');
-    const bottomNav  = document.getElementById('bottom-nav');
+    const isTrainer = App.auth.isTrainer();
+    const icons = App.icons;
 
-    const studentNavItems = [
-      { view:'dashboard',     icon:'⬡', label:'Dashboard' },
-      { view:'programa',      icon:'📋', label:'Programa' },
-      { view:'treinar',       icon:'💪', label:'Treinar' },
-      { view:'progresso',     icon:'📈', label:'Progresso' },
-      { view:'perfil',        icon:'👤', label:'Meu Perfil' },
-      { view:'cardio',        icon:'⏱', label:'Cardio' },
-      { view:'ciencia',       icon:'🔬', label:'Ciência' },
-      { view:'periodizacao',  icon:'📅', label:'Periodização' },
+    const studentItems = [
+      { view:'dashboard',    label:'Início',      icon:'home' },
+      { view:'treino',       label:'Treino',      icon:'dumbbell' },
+      { view:'progresso',    label:'Progresso',   icon:'trending-up' },
+      { view:'perfil',       label:'Meu Perfil',  icon:'user' },
+      { view:'ciencia',      label:'Ciência',     icon:'book-open' },
+      { view:'cardio',       label:'Cardio',      icon:'activity' },
+    ];
+    const trainerItems = [
+      { view:'trainer-dashboard', label:'Início',    icon:'home' },
+      { view:'trainer-alunos',    label:'Alunos',    icon:'users' },
+      { view:'criar-treino',      label:'Criar Treino', icon:'plus' },
     ];
 
-    const trainerNavItems = [
-      { view:'trainer-dashboard', icon:'⬡', label:'Dashboard' },
-      { view:'trainer-alunos',    icon:'👥', label:'Meus Alunos' },
-    ];
+    const items   = isTrainer ? trainerItems : studentItems;
+    const botItems = isTrainer ? trainerItems : studentItems.slice(0,5);
 
-    const items = isTrainer ? trainerNavItems : studentNavItems;
-    const bottomItems = isTrainer ? trainerNavItems : studentNavItems.slice(0,5);
+    const sidebar = document.getElementById('sidebar-nav');
+    const botNav  = document.getElementById('bottom-nav');
 
-    if (sidebarNav) {
-      sidebarNav.innerHTML = items.map(it => `
-        <a href="#" class="nav-item" data-view="${it.view}" role="menuitem"
-          aria-label="${it.label}">
-          <span aria-hidden="true">${it.icon}</span>${it.label}
-        </a>
-      `).join('');
-    }
+    if (sidebar) sidebar.innerHTML = items.map(it => `
+      <a href="#" class="nav-item" data-view="${it.view}" role="menuitem" aria-label="${it.label}">
+        <span class="nav-icon" aria-hidden="true">${icons.get(it.icon,18)}</span>
+        <span class="nav-label">${it.label}</span>
+      </a>`).join('');
 
-    if (bottomNav) {
-      bottomNav.innerHTML = bottomItems.map(it => `
-        <a href="#" class="bnav-item" data-view="${it.view}" aria-label="${it.label}">
-          <span aria-hidden="true">${it.icon}</span>
-          <small>${it.label}</small>
-        </a>
-      `).join('');
-    }
+    if (botNav) botNav.innerHTML = botItems.map(it => `
+      <a href="#" class="bnav-item" data-view="${it.view}" aria-label="${it.label}">
+        <span aria-hidden="true">${icons.get(it.icon,22)}</span>
+        <span>${it.label}</span>
+      </a>`).join('');
 
-    // Re-attach listeners após recriar os elementos
-    this._setupNavListeners();
+    this._setupNav();
   },
 
-  /** Setup de event listeners de navegação */
-  _setupNavListeners() {
+  /* ── Setup de event listeners de navegação ───────────────────── */
+  _setupNav() {
     document.querySelectorAll('[data-view]').forEach(el => {
-      // Remove listener antigo para evitar duplicatas
-      el.replaceWith(el.cloneNode(true));
+      const clone = el.cloneNode(true);
+      el.parentNode?.replaceChild(clone, el);
     });
     document.querySelectorAll('[data-view]').forEach(el => {
-      el.addEventListener('click', e => {
-        e.preventDefault();
-        this.navigateTo(el.dataset.view);
-      });
+      el.addEventListener('click', e => { e.preventDefault(); this.navigateTo(el.dataset.view); });
     });
   },
 
-  /** Navega para uma view */
-  navigateTo(viewName) {
-    TF.state.currentView = viewName;
+  /* ── Roteador principal ───────────────────────────────────────── */
+  navigateTo(viewName, param) {
+    App.state.currentView = viewName;
 
-    // Atualiza estado ativo dos navs
+    /* Atualiza estado ativo dos navs */
     document.querySelectorAll('[data-view]').forEach(el => {
       el.classList.toggle('active', el.dataset.view === viewName);
       el.setAttribute('aria-current', el.dataset.view === viewName ? 'page' : 'false');
     });
 
-    // Mostra a view correta
-    document.querySelectorAll('.view').forEach(v => {
-      v.classList.toggle('active', v.id === 'view-' + viewName);
-    });
+    /* Mostra a view correta */
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-'+viewName));
 
-    // Scroll para o topo
-    document.getElementById('main-content')?.scrollTo(0, 0);
+    /* Scroll para o topo */
+    document.getElementById('main-content')?.scrollTo(0,0);
 
-    // Renderiza o conteúdo da view
-    this._renderView(viewName);
+    /* Renderiza conteúdo */
+    this._renderView(viewName, param);
   },
 
-  /** Mapa de views → funções de renderização */
-  _renderView(name) {
-    const sv = TF.views.student;
-    const tv = TF.views.trainer;
-
-    const renderMap = {
+  _renderView(name, param) {
+    const sv = App.views.student;
+    const tv = App.views.trainer;
+    const map = {
       'dashboard':          () => sv.renderDashboard(),
-      'programa':           () => sv.renderPrograma(),
-      'treinar':            () => this._renderTreinarView(),
-      'progresso':          () => sv.renderProgresso(),
+      'treino':             () => sv.renderTreino(),
       'perfil':             () => sv.renderPerfil(),
-      'cardio':             () => sv.renderCardio(),
-      'ciencia':            () => sv.renderCiencia(),
-      'periodizacao':       () => sv.renderPeriodizacao(),
+      'progresso':          () => sv.renderProgresso(),
+      'ciencia':            () => {},
+      'cardio':             () => {},
       'trainer-dashboard':  () => tv.renderDashboard(),
       'trainer-alunos':     () => tv.renderAlunos(),
+      'criar-treino':       () => tv.renderCriarTreino(param),
     };
-
-    if (renderMap[name]) renderMap[name]();
+    if (map[name]) map[name]();
   },
 
-  _renderTreinarView() {
-    if (TF.state.activeWorkout) {
-      // Já tem treino ativo — mantém a tela
-      document.getElementById('workout-select-screen').classList.add('hidden');
-      document.getElementById('workout-active-screen').classList.remove('hidden');
-    } else {
-      document.getElementById('workout-active-screen').classList.add('hidden');
-      document.getElementById('workout-select-screen').classList.remove('hidden');
-      // Renderiza grid de dias
-      const el = document.getElementById('treinar-day-grid');
-      if (el) el.innerHTML = TF.PROGRAM.map(day => `
-        <button class="day-quick-card" onclick="TF.workout.startDay('${day.id}')"
-          aria-label="Iniciar ${day.nome}">
-          <div class="dqc-day">${day.dia}</div>
-          <div class="dqc-name">${day.nome}</div>
-          <div class="dqc-focus">${day.foco}</div>
-        </button>
-      `).join('');
-    }
-  },
-
-  /** Atalhos de teclado */
-  _setupKeyboardShortcuts() {
+  /* ── Atalhos de teclado ──────────────────────────────────────── */
+  _setupKeyboard() {
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') {
-        TF.modal.close();
-        TF.workout.skipRest?.();
-      }
-      if (e.key === 'Enter') {
-        const logModal = document.getElementById('modal-log');
-        if (logModal && !logModal.classList.contains('hidden') &&
-            document.activeElement?.tagName !== 'TEXTAREA') {
-          e.preventDefault();
-          TF.workout.saveLog();
-        }
+      if (e.key === 'Escape') App.modal.close();
+      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+        const activeModal = document.querySelector('.modal:not(.hidden)');
+        if (activeModal) { e.preventDefault(); App.modal.save(); }
       }
     });
   },
 
-  /** Click nos backdrops fecha os modais */
+  /* ── Fecha modais ao clicar no backdrop ──────────────────────── */
   _setupModalBackdrops() {
-    document.querySelectorAll('.modal-backdrop').forEach(el => {
-      el.addEventListener('click', () => TF.modal.close());
-    });
+    document.querySelectorAll('.modal-backdrop').forEach(el => el.addEventListener('click', () => App.modal.close()));
   },
 };
 
-// ── Funções globais chamadas pelo HTML (onclick) ─────────────
-// Auth
-window.handleLogin    = () => TF.auth.login();
-window.handleSignup   = () => TF.auth.signup();
-window.handleLogout   = () => TF.auth.logout();
-window.enterDemoMode  = () => TF.auth.enterDemo();
-window.toggleAuth     = (m) => TF.auth.toggleForm(m);
+/* ── Funções globais (chamadas pelo HTML) ─────────────────────────── */
+window.handleLogin          = () => App.auth.login();
+window.handleRegister       = () => App.auth.register();
+window.handleForgot         = () => App.auth.forgotPassword();
+window.handleUpdatePassword = () => App.auth.updatePassword();
+window.handleLogout         = () => App.auth.logout();
+window.toggleAuthPanel      = (p) => App.boot._showAuthPanel(p);
+window.closeModal           = () => App.modal.close();
+window.saveModal            = () => App.modal.save();
+window.saveTreino           = () => App.views.trainer.saveTreino();
 
-// Workout
-window.saveLog        = () => TF.workout.saveLog();
-window.skipRest       = () => TF.workout.skipRest();
-window.cancelWorkout  = () => TF.workout.cancel();
-window.finishWorkout  = () => TF.workout.finish();
-
-// Modal
-window.closeModal     = () => TF.modal.close();
-window.saveModal      = () => TF.modal.save();
-
-// Progresso
-window.renderProgressChart = () => TF.views.student.renderProgressChart();
-
-// Treinador
-window.openVincularAluno = () => TF.views.trainer._openVincularModal();
-
-// ── Inicia quando o DOM estiver pronto ──────────────────────
-document.addEventListener('DOMContentLoaded', () => TF.app.init());
+/* ── Inicia quando DOM estiver pronto ─────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => App.boot.init());
