@@ -331,7 +331,7 @@ App.auth = {
   /* LOGIN */
   async login() {
     const email = document.getElementById('login-email')?.value.trim().toLowerCase();
-    const pass  = document.getElementById('login-password')?.value;
+    const pass = document.getElementById('login-password')?.value;
 
     this._hideError('login');
 
@@ -340,55 +340,74 @@ App.auth = {
       return;
     }
 
-    if (!App.USE_SUPABASE) {
-      const users = App.ls('local_users') || {};
-      const user = users[email];
-      if (!user || user.password !== pass) {
-        this._showError('login', 'Email ou senha inválidos.');
+    try {
+      App.utils.setBtnLoading('btn-login', true);
+
+      if (!App.USE_SUPABASE) {
+        const users = App.ls('local_users') || {};
+        const user = users[email];
+
+        if (!user || user.password !== pass) {
+          this._showError('login', 'Email ou senha inválidos.');
+          return;
+        }
+
+        App.state.user = user;
+        App.ls('current_user', user);
+        App.boot.enterApp();
         return;
       }
-      App.state.user = user;
-      App.ls('current_user', user);
+
+      if (!App.state.sb) {
+        this._showError('login', 'Conexão com Supabase não inicializada.');
+        return;
+      }
+
+      const { data, error } = await App.state.sb.auth.signInWithPassword({
+        email,
+        password: pass
+      });
+
+      if (error) {
+        this._showError('login', error.message);
+        return;
+      }
+
+      const user = data?.user;
+
+      if (!user) {
+        this._showError('login', 'Não foi possível iniciar sessão.');
+        return;
+      }
+
+      if (!user.email_confirmed_at) {
+        this._showError('login', 'Confirme seu email antes de entrar.');
+        return;
+      }
+
+      const profile = await App.data.getProfile(user.id);
+
+      if (!profile) {
+        this._showError('login', 'Perfil do usuário não encontrado.');
+        return;
+      }
+
+      App.state.user = { ...user, ...profile };
       App.boot.enterApp();
-      return;
+    } catch (err) {
+      console.error('Erro no login:', err);
+      this._showError('login', err?.message || 'Erro inesperado ao entrar.');
+    } finally {
+      App.utils.setBtnLoading('btn-login', false);
     }
-
-    App.utils.setBtnLoading('btn-login', true);
-
-    const { data, error } = await App.state.sb.auth.signInWithPassword({
-      email,
-      password: pass
-    });
-
-    App.utils.setBtnLoading('btn-login', false);
-
-    if (error) {
-      this._showError('login', error.message);
-      return;
-    }
-
-    const user = data?.user;
-    if (!user) {
-      this._showError('login', 'Não foi possível iniciar sessão.');
-      return;
-    }
-
-    if (!user.email_confirmed_at) {
-      this._showError('login', 'Confirme seu email antes de entrar.');
-      return;
-    }
-
-    const profile = await App.data.getProfile(user.id);
-    App.state.user = { ...user, ...profile };
-    App.boot.enterApp();
   },
 
   /* CADASTRO */
   async register() {
-    const nome  = document.getElementById('reg-nome')?.value.trim();
+    const nome = document.getElementById('reg-nome')?.value.trim();
     const email = document.getElementById('reg-email')?.value.trim().toLowerCase();
-    const pass  = document.getElementById('reg-password')?.value;
-    const role  = this._role;
+    const pass = document.getElementById('reg-password')?.value;
+    const role = this._role;
 
     this._hideError('register');
 
@@ -407,44 +426,52 @@ App.auth = {
       return;
     }
 
-    App.utils.setBtnLoading('btn-register', true);
+    try {
+      App.utils.setBtnLoading('btn-register', true);
 
-    if (!App.USE_SUPABASE) {
-      const users = App.ls('local_users') || {};
-      if (users[email]) {
-        App.utils.setBtnLoading('btn-register', false);
-        this._showError('register', 'Email já cadastrado.');
+      if (!App.USE_SUPABASE) {
+        const users = App.ls('local_users') || {};
+        if (users[email]) {
+          this._showError('register', 'Email já cadastrado.');
+          return;
+        }
+
+        const id = 'u_' + Date.now();
+        users[email] = { id, nome, password: pass, email, role, plan_type: 'premium' };
+        App.ls('local_users', users);
+        App.state.user = { id, nome, email, role, plan_type: 'premium' };
+        App.ls('current_user', App.state.user);
+        App.boot.enterApp();
         return;
       }
 
-      const id = 'u_' + Date.now();
-      users[email] = { id, nome, password: pass, email, role, plan_type: 'premium' };
-      App.ls('local_users', users);
-      App.state.user = { id, nome, email, role, plan_type: 'premium' };
-      App.ls('current_user', App.state.user);
-      App.utils.setBtnLoading('btn-register', false);
-      App.boot.enterApp();
-      return;
-    }
-
-    const { error } = await App.state.sb.auth.signUp({
-      email,
-      password: pass,
-      options: {
-        data: { nome, role },
-        emailRedirectTo: `${window.location.origin}/`
+      if (!App.state.sb) {
+        this._showError('register', 'Conexão com Supabase não inicializada.');
+        return;
       }
-    });
 
-    App.utils.setBtnLoading('btn-register', false);
+      const { error } = await App.state.sb.auth.signUp({
+        email,
+        password: pass,
+        options: {
+          data: { nome, role },
+          emailRedirectTo: `${window.location.origin}/`
+        }
+      });
 
-    if (error) {
-      this._showError('register', error.message);
-      return;
+      if (error) {
+        this._showError('register', error.message);
+        return;
+      }
+
+      document.getElementById('register-form')?.classList.add('hidden');
+      document.getElementById('register-success')?.classList.remove('hidden');
+    } catch (err) {
+      console.error('Erro no cadastro:', err);
+      this._showError('register', err?.message || 'Erro inesperado no cadastro.');
+    } finally {
+      App.utils.setBtnLoading('btn-register', false);
     }
-
-    document.getElementById('register-form')?.classList.add('hidden');
-    document.getElementById('register-success')?.classList.remove('hidden');
   },
 
   /* ESQUECI MINHA SENHA */
@@ -463,28 +490,37 @@ App.auth = {
       return;
     }
 
-    App.utils.setBtnLoading('btn-forgot', true);
+    try {
+      App.utils.setBtnLoading('btn-forgot', true);
 
-    if (!App.USE_SUPABASE) {
-      App.utils.setBtnLoading('btn-forgot', false);
+      if (!App.USE_SUPABASE) {
+        document.getElementById('forgot-form')?.classList.add('hidden');
+        document.getElementById('forgot-success')?.classList.remove('hidden');
+        return;
+      }
+
+      if (!App.state.sb) {
+        this._showError('forgot', 'Conexão com Supabase não inicializada.');
+        return;
+      }
+
+      const { error } = await App.state.sb.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/`
+      });
+
+      if (error) {
+        this._showError('forgot', error.message);
+        return;
+      }
+
       document.getElementById('forgot-form')?.classList.add('hidden');
       document.getElementById('forgot-success')?.classList.remove('hidden');
-      return;
+    } catch (err) {
+      console.error('Erro em forgotPassword:', err);
+      this._showError('forgot', err?.message || 'Erro inesperado ao enviar recuperação.');
+    } finally {
+      App.utils.setBtnLoading('btn-forgot', false);
     }
-
-    const { error } = await App.state.sb.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/`
-    });
-
-    App.utils.setBtnLoading('btn-forgot', false);
-
-    if (error) {
-      this._showError('forgot', error.message);
-      return;
-    }
-
-    document.getElementById('forgot-form')?.classList.add('hidden');
-    document.getElementById('forgot-success')?.classList.remove('hidden');
   },
 
   /* NOVA SENHA */
@@ -504,21 +540,31 @@ App.auth = {
       return;
     }
 
-    App.utils.setBtnLoading('btn-newpass', true);
+    try {
+      App.utils.setBtnLoading('btn-newpass', true);
 
-    const { error } = await App.state.sb.auth.updateUser({
-      password: pass
-    });
+      if (!App.state.sb) {
+        this._showError('newpass', 'Conexão com Supabase não inicializada.');
+        return;
+      }
 
-    App.utils.setBtnLoading('btn-newpass', false);
+      const { error } = await App.state.sb.auth.updateUser({
+        password: pass
+      });
 
-    if (error) {
-      this._showError('newpass', error.message);
-      return;
+      if (error) {
+        this._showError('newpass', error.message);
+        return;
+      }
+
+      App.utils.toast('Senha atualizada com sucesso!');
+      App.boot.enterAuth('login');
+    } catch (err) {
+      console.error('Erro em updatePassword:', err);
+      this._showError('newpass', err?.message || 'Erro inesperado ao atualizar senha.');
+    } finally {
+      App.utils.setBtnLoading('btn-newpass', false);
     }
-
-    App.utils.toast('Senha atualizada com sucesso!');
-    App.boot.enterAuth('login');
   },
 
   /* REENVIAR EMAIL DE CONFIRMAÇÃO */
@@ -534,26 +580,41 @@ App.auth = {
       return;
     }
 
-    const { error } = await App.state.sb.auth.resend({
-      type: 'signup',
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`
+    try {
+      if (!App.state.sb) {
+        this._showError('register', 'Conexão com Supabase não inicializada.');
+        return;
       }
-    });
 
-    if (error) {
-      this._showError('register', error.message);
-      return;
+      const { error } = await App.state.sb.auth.resend({
+        type: 'signup',
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`
+        }
+      });
+
+      if (error) {
+        this._showError('register', error.message);
+        return;
+      }
+
+      App.utils.toast('Email de confirmação reenviado.');
+    } catch (err) {
+      console.error('Erro em resendConfirmationEmail:', err);
+      this._showError('register', err?.message || 'Erro inesperado ao reenviar email.');
     }
-
-    App.utils.toast('Email de confirmação reenviado.');
   },
 
   async logout() {
-    if (App.USE_SUPABASE && App.state.sb) {
-      await App.state.sb.auth.signOut();
+    try {
+      if (App.USE_SUPABASE && App.state.sb) {
+        await App.state.sb.auth.signOut();
+      }
+    } catch (err) {
+      console.error('Erro no logout:', err);
     }
+
     App.ls('current_user', null);
     App.ls('history', null);
     App.state.user = null;
@@ -564,4 +625,3 @@ App.auth = {
   isPremium() { return App.state.user?.plan_type === 'premium'; },
   isTrainer() { return App.state.user?.role === 'treinador'; },
 };
-window.handleResendConfirmation = () => App.auth.resendConfirmationEmail();
