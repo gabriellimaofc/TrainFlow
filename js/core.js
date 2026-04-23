@@ -1,401 +1,417 @@
-/* ============================================================
-   TrainFlow v2 — js/utils.js + js/data.js + js/auth.js
-   (agrupados num único arquivo para simplificar o carregamento)
-   ============================================================ */
+/* =================================================================
+   core.js — Utils, Data Service e Auth
+   ================================================================= */
 
-// ════════════════════════════════════════════════════════════
-// UTILS
-// ════════════════════════════════════════════════════════════
-TF.utils = {
+/* ─── UTILS ────────────────────────────────────────────────────── */
+App.utils = {
+  today()            { return new Date().toISOString().split('T')[0]; },
+  fmtDate(str, opts) { if(!str) return '—'; return new Date(str+'T12:00:00').toLocaleDateString('pt-BR',{day:'numeric',month:'short',...opts}); },
+  greeting(nome)     { const h=new Date().getHours(); const g=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite'; return `${g}, ${(nome||'').split(' ')[0]}`; },
+  initial(nome)      { return (nome||'U')[0].toUpperCase(); },
+  esc(str)           { return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); },
 
-  /** Formata data para pt-BR */
-  fmtDate(str, opts = {}) {
-    if (!str) return '—';
-    const d = new Date(str + 'T12:00:00');
-    return d.toLocaleDateString('pt-BR', { day:'numeric', month:'short', ...opts });
-  },
-
-  /** Diferença em dias entre duas datas */
-  dayDiff(a, b) {
-    const d1 = new Date(a + 'T00:00:00');
-    const d2 = new Date(b + 'T00:00:00');
-    return Math.round((d2 - d1) / 86400000);
-  },
-
-  /** Data de hoje em yyyy-mm-dd */
-  today() {
-    return new Date().toISOString().split('T')[0];
-  },
-
-  /** Desabilita/habilita um botão e troca o texto */
-  setBtnLoading(id, loading, text = 'Aguarde...') {
+  /* Mostra/esconde spinner num botão */
+  setBtnLoading(id, loading, original) {
     const btn = document.getElementById(id);
     if (!btn) return;
     btn.disabled = loading;
-    const span = btn.querySelector('span') || btn;
-    if (span !== btn) span.textContent = loading ? text : btn.dataset.label || span.textContent;
-  },
-
-  /** Mostra um toast de notificação */
-  toast(msg, type = 'success', dur = 3500) {
-    const icons = { success:'✅', error:'❌', warn:'⚠️', info:'ℹ️' };
-    const el = document.createElement('div');
-    el.className = `toast ${type}`;
-    el.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ️'}</span><span>${msg}</span>`;
-    const container = document.getElementById('toast-container');
-    container.appendChild(el);
-    setTimeout(() => el.remove(), dur);
-  },
-
-  /** Calcula streak (dias consecutivos) a partir do histórico */
-  calcStreak(history) {
-    if (!history.length) return { current:0, best: TF.ls('best_streak') || 0 };
-    const dates = [...new Set(history.map(h => h.date))].sort((a,b) => b > a ? 1 : -1);
-    const today  = this.today();
-    let current = 0, prev = today;
-    for (const d of dates) {
-      const diff = this.dayDiff(d, prev);
-      if (diff <= 1) { current++; prev = d; }
-      else break;
+    if (loading) {
+      btn.dataset.original = btn.innerHTML;
+      btn.innerHTML = `<span class="spinner"></span> Aguarde...`;
+    } else {
+      btn.innerHTML = btn.dataset.original || original || btn.innerHTML;
     }
-    const best = Math.max(current, TF.ls('best_streak') || 0);
-    TF.ls('best_streak', best);
-    return { current, best };
   },
 
-  /** Conta treinos distintos na semana atual */
-  countWeekWorkouts(history) {
-    const now   = new Date();
-    const start = new Date(now);
-    start.setDate(now.getDate() - now.getDay());
-    start.setHours(0,0,0,0);
-    const keys = new Set(history
-      .filter(h => new Date(h.date+'T12:00:00') >= start)
-      .map(h => h.date + '_' + (h.day_id||'')));
-    return keys.size;
+  /* Toast de notificação (sem emojis) */
+  toast(msg, type = 'success', duration = 4000) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const icons = { success:'check-circle', error:'alert-triangle', warn:'info', info:'info' };
+    const colors = { success:'var(--success)', error:'var(--error)', warn:'var(--warning)', info:'var(--primary)' };
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    el.innerHTML = `<span class="toast-icon" style="color:${colors[type]}">${App.icons.get(icons[type]||'info',16)}</span><span class="toast-msg">${this.esc(msg)}</span>`;
+    container.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('toast-visible'));
+    setTimeout(() => { el.classList.remove('toast-visible'); setTimeout(()=>el.remove(), 400); }, duration);
   },
 
-  /** Retorna saudação por hora do dia */
-  greeting(nome) {
-    const h = new Date().getHours();
-    const g = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
-    return `${g}, ${(nome||'').split(' ')[0]}! 👋`;
+  /* Calcula streak de dias consecutivos */
+  calcStreak(dates) {
+    if (!dates.length) return 0;
+    const sorted = [...new Set(dates)].sort((a,b) => b>a?1:-1);
+    let streak = 0;
+    let prev   = this.today();
+    for (const d of sorted) {
+      const diff = (new Date(prev+'T12:00:00') - new Date(d+'T12:00:00')) / 86400000;
+      if (diff <= 1) { streak++; prev = d; } else break;
+    }
+    return streak;
   },
 
-  /** Escapa HTML para evitar XSS */
-  esc(str) {
-    return String(str||'')
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;');
-  },
+  /* Valida email */
+  isEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); },
 
-  /** Converte segundos → mm:ss */
-  fmtTime(secs) {
-    const m = String(Math.floor(secs/60)).padStart(2,'0');
-    const s = String(secs%60).padStart(2,'0');
-    return `${m}:${s}`;
+  /* Debounce para campos de busca */
+  debounce(fn, ms = 300) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
   },
 };
 
-// ════════════════════════════════════════════════════════════
-// LOCALSTORAGE HELPER (namespaced)
-// ════════════════════════════════════════════════════════════
-TF.ls = function(key, val) {
-  const k = 'tf2_' + key;
-  if (val !== undefined) { localStorage.setItem(k, JSON.stringify(val)); return val; }
-  try { return JSON.parse(localStorage.getItem(k)); } catch { return null; }
-};
+/* ─── DATA SERVICE ─────────────────────────────────────────────── */
+App.data = {
 
-// ════════════════════════════════════════════════════════════
-// DATA SERVICE  (Supabase ou localStorage como fallback)
-// ════════════════════════════════════════════════════════════
-TF.data = {
-
-  // ── Histórico ──────────────────────────────────────────
-  async saveLog(entry) {
-    const uid   = TF.state.user?.id;
-    const clean = { ...entry, user_id: uid };
-    // localStorage (sempre — fallback e cache)
-    const hist  = TF.ls('history') || [];
-    hist.push(clean);
-    TF.ls('history', hist);
-    // Supabase
-    if (TF.USE_SUPABASE && TF.sb) {
-      await TF.sb.from('historico').insert({
-        user_id:       uid,
-        exercise_id:   clean.exercise_id,
-        exercise_name: clean.exercise_name,
-        day_id:        clean.day_id,
-        carga:         clean.carga,
-        reps:          clean.reps,
-        series:        clean.series,
-        data:          clean.date,
+  /* Histórico de treinos */
+  async saveSession(entry) {
+    const uid = App.state.user?.id;
+    const row = { ...entry, user_id: uid };
+    const cache = App.ls('history') || [];
+    cache.unshift(row);
+    App.ls('history', cache.slice(0, 500));
+    if (App.USE_SUPABASE && App.state.sb) {
+      await App.state.sb.from('historico_treino').insert({
+        user_id:        uid,
+        treino_id:      entry.treino_id   || null,
+        exercicio_id:   entry.exercicio_id|| null,
+        exercicio_nome: entry.exercicio_nome,
+        carga:          entry.carga       || 0,
+        reps:           entry.reps        || 0,
+        series:         entry.series      || 0,
+        data:           entry.data        || App.utils.today(),
       });
     }
   },
 
   async getHistory(userId) {
-    if (TF.USE_SUPABASE && TF.sb) {
-      const { data, error } = await TF.sb.from('historico')
-        .select('*').eq('user_id', userId).order('data',{ ascending:false });
-      if (!error && data) {
-        const mapped = data.map(r => ({
-          exercise_id:   r.exercise_id,
-          exercise_name: r.exercise_name,
-          day_id:        r.day_id,
-          carga:         r.carga,
-          reps:          r.reps,
-          series:        r.series,
-          date:          r.data,
-          user_id:       r.user_id,
-        }));
-        TF.ls('history', mapped);
-        return mapped;
-      }
+    if (App.USE_SUPABASE && App.state.sb) {
+      const { data } = await App.state.sb.from('historico_treino')
+        .select('*').eq('user_id', userId).order('data', { ascending: false }).limit(200);
+      if (data) { App.ls('history', data); return data; }
     }
-    return TF.ls('history') || [];
+    return App.ls('history') || [];
   },
 
-  getHistorySync() { return TF.ls('history') || []; },
-
-  // ── Perfil ─────────────────────────────────────────────
+  /* Profile */
   async getProfile(userId) {
-    if (TF.USE_SUPABASE && TF.sb) {
-      const { data } = await TF.sb.from('profiles').select('*').eq('id', userId).single();
-      if (data) { TF.ls('profile', data); return data; }
+    if (App.USE_SUPABASE && App.state.sb) {
+      const { data } = await App.state.sb.from('profiles').select('*').eq('id', userId).single();
+      if (data) { App.ls('profile', data); return data; }
     }
-    return TF.ls('profile');
+    return App.ls('profile');
   },
 
   async updateProfile(userId, fields) {
-    TF.ls('profile', { ...TF.ls('profile'), ...fields });
-    if (TF.USE_SUPABASE && TF.sb) {
-      await TF.sb.from('profiles').update(fields).eq('id', userId);
+    App.ls('profile', { ...(App.ls('profile')||{}), ...fields });
+    if (App.USE_SUPABASE && App.state.sb) {
+      await App.state.sb.from('profiles').update(fields).eq('id', userId);
     }
   },
 
-  // ── Perfil do aluno ────────────────────────────────────
-  async getAlunoPerfil(userId) {
-    if (TF.USE_SUPABASE && TF.sb) {
-      const { data } = await TF.sb.from('aluno_perfil').select('*').eq('user_id', userId).single();
-      if (data) { TF.ls('aluno_perfil', data); return data; }
+  /* Detalhes do aluno */
+  async getAlunoDetalhes(userId) {
+    if (App.USE_SUPABASE && App.state.sb) {
+      const { data } = await App.state.sb.from('alunos_detalhes').select('*').eq('user_id', userId).single();
+      if (data) { App.ls(`aluno_${userId}`, data); return data; }
     }
-    return TF.ls('aluno_perfil');
+    return App.ls(`aluno_${userId}`);
   },
 
-  async upsertAlunoPerfil(userId, fields) {
-    const data = { user_id: userId, ...fields, updated_at: new Date().toISOString() };
-    TF.ls('aluno_perfil', data);
-    if (TF.USE_SUPABASE && TF.sb) {
-      await TF.sb.from('aluno_perfil').upsert(data, { onConflict:'user_id' });
+  async upsertAlunoDetalhes(userId, fields) {
+    const row = { user_id: userId, ...fields };
+    App.ls(`aluno_${userId}`, row);
+    if (App.USE_SUPABASE && App.state.sb) {
+      await App.state.sb.from('alunos_detalhes').upsert(row, { onConflict: 'user_id' });
     }
   },
 
-  // ── Medidas ────────────────────────────────────────────
+  /* Medidas */
   async getMedidas(userId) {
-    if (TF.USE_SUPABASE && TF.sb) {
-      const { data } = await TF.sb.from('medidas').select('*')
-        .eq('user_id', userId).order('data',{ ascending:false });
-      if (data) { TF.ls('medidas', data); return data; }
+    if (App.USE_SUPABASE && App.state.sb) {
+      const { data } = await App.state.sb.from('medidas').select('*').eq('user_id', userId).order('data', { ascending: false });
+      if (data) { App.ls(`medidas_${userId}`, data); return data; }
     }
-    return TF.ls('medidas') || [];
+    return App.ls(`medidas_${userId}`) || [];
   },
 
   async saveMedida(userId, fields) {
-    const row = { user_id: userId, data: TF.utils.today(), ...fields };
-    const arr = TF.ls('medidas') || [];
+    const row = { user_id: userId, data: App.utils.today(), ...fields };
+    const arr = App.ls(`medidas_${userId}`) || [];
     arr.unshift(row);
-    TF.ls('medidas', arr);
-    if (TF.USE_SUPABASE && TF.sb) {
-      await TF.sb.from('medidas').insert(row);
+    App.ls(`medidas_${userId}`, arr);
+    if (App.USE_SUPABASE && App.state.sb) {
+      await App.state.sb.from('medidas').insert(row);
     }
   },
 
-  // ── Treinador: busca alunos vinculados ─────────────────
-  async getAlunosDoTreinador(treinadorId) {
-    if (TF.USE_SUPABASE && TF.sb) {
-      const { data } = await TF.sb.from('treinador_aluno')
-        .select('aluno_id, profiles:aluno_id(id,nome,plan_type,created_at), aluno_perfil:aluno_id(objetivo,peso,altura)')
-        .eq('treinador_id', treinadorId).eq('ativo', true);
-      if (data) return data;
+  /* Biblioteca de exercícios */
+  async getExercicios() {
+    if (App.state.exerciseList.length) return App.state.exerciseList;
+    if (App.USE_SUPABASE && App.state.sb) {
+      const { data } = await App.state.sb.from('exercicios').select('*').eq('ativo', true).order('grupo_muscular').order('nome');
+      if (data && data.length) { App.state.exerciseList = data; App.ls('exercicios', data); return data; }
     }
+    const cached = App.ls('exercicios');
+    if (cached) { App.state.exerciseList = cached; return cached; }
     return [];
+  },
+
+  /* Treino do aluno */
+  async getTreinoAtivo(alunoId) {
+    if (App.USE_SUPABASE && App.state.sb) {
+      const { data } = await App.state.sb.from('treinos')
+        .select(`*, treino_exercicios(*, exercicios(*))`)
+        .eq('aluno_id', alunoId).eq('status', 'ativo')
+        .order('created_at', { ascending: false }).limit(1).single();
+      if (data) { App.ls(`treino_${alunoId}`, data); return data; }
+      return null;
+    }
+    return App.ls(`treino_${alunoId}`) || null;
+  },
+
+  /* Treinos do treinador */
+  async getTreinosDoTreinador(treinadorId) {
+    if (!App.USE_SUPABASE || !App.state.sb) return [];
+    const { data } = await App.state.sb.from('treinos')
+      .select('*, profiles!treinos_aluno_id_fkey(nome, email)')
+      .eq('treinador_id', treinadorId)
+      .order('updated_at', { ascending: false });
+    return data || [];
+  },
+
+  /* Criar treino */
+  async criarTreino(treinadorId, alunoId, nome, descricao, exercicios) {
+    if (!App.USE_SUPABASE || !App.state.sb) {
+      App.utils.toast('Supabase não configurado.', 'error'); return null;
+    }
+    const { data: treino, error } = await App.state.sb.from('treinos').insert({
+      treinador_id: treinadorId, aluno_id: alunoId,
+      nome, descricao, status: 'ativo',
+    }).select().single();
+    if (error || !treino) { App.utils.toast('Erro ao criar treino.', 'error'); return null; }
+
+    // Inserir exercícios do treino
+    const rows = exercicios.map((ex, i) => ({
+      treino_id:    treino.id,
+      exercicio_id: ex.exercicio_id,
+      series:       ex.series,
+      repeticoes:   ex.repeticoes,
+      descanso:     ex.descanso || '60s',
+      observacoes:  ex.observacoes || null,
+      ordem:        i,
+    }));
+    await App.state.sb.from('treino_exercicios').insert(rows);
+    return treino;
+  },
+
+  /* Alunos vinculados ao treinador */
+  async getAlunosDoTreinador(treinadorId) {
+    if (!App.USE_SUPABASE || !App.state.sb) return [];
+    const { data } = await App.state.sb.from('treinador_aluno')
+      .select('*, aluno:aluno_id(id, nome, email, plan_type, created_at)')
+      .eq('treinador_id', treinadorId).eq('ativo', true);
+    return data || [];
   },
 
   async vincularAluno(treinadorId, alunoEmail) {
-    if (!TF.USE_SUPABASE || !TF.sb) return { error: 'Supabase não configurado.' };
-    // Busca o aluno pelo email
-    const { data: users } = await TF.sb.from('profiles').select('id,nome').eq('email_check', alunoEmail);
-    // alternativa: buscar via auth — mas sem admin key não dá.
-    // Usamos um campo de busca por nome ou workaround:
-    const { data: profile } = await TF.sb.rpc('get_profile_by_email', { p_email: alunoEmail });
-    if (!profile) return { error: 'Aluno não encontrado com este email.' };
-    await TF.sb.from('treinador_aluno').upsert({ treinador_id: treinadorId, aluno_id: profile.id, ativo: true });
+    if (!App.USE_SUPABASE || !App.state.sb) return { error: 'Supabase não configurado.' };
+    const { data: profile, error } = await App.state.sb
+      .from('profiles').select('id, nome, email').eq('email', alunoEmail).single();
+    if (error || !profile) return { error: 'Nenhum aluno encontrado com esse email.' };
+    if (profile.id === treinadorId) return { error: 'Não é possível se vincular a si mesmo.' };
+    await App.state.sb.from('treinador_aluno')
+      .upsert({ treinador_id: treinadorId, aluno_id: profile.id, ativo: true }, { onConflict: 'treinador_id,aluno_id' });
     return { ok: true, aluno: profile };
   },
 
-  async getHistoricoAluno(alunoId) {
-    if (TF.USE_SUPABASE && TF.sb) {
-      const { data } = await TF.sb.from('historico').select('*')
-        .eq('user_id', alunoId).order('data',{ ascending:false }).limit(100);
-      return data || [];
-    }
-    return [];
+  /* Observações */
+  async getObservacoes(alunoId) {
+    if (!App.USE_SUPABASE || !App.state.sb) return App.ls(`obs_${alunoId}`) || [];
+    const { data } = await App.state.sb.from('observacoes_treinador')
+      .select('*').eq('aluno_id', alunoId).order('created_at', { ascending: false });
+    return data || [];
   },
 
-  // ── Notas do treinador ─────────────────────────────────
-  async getNotas(alunoId) {
-    if (TF.USE_SUPABASE && TF.sb) {
-      const { data } = await TF.sb.from('notas_treinador').select('*')
-        .eq('aluno_id', alunoId).order('created_at',{ ascending:false });
-      if (data) return data;
-    }
-    return TF.ls(`notas_${alunoId}`) || [];
-  },
-
-  async saveNota(treinadorId, alunoId, conteudo) {
+  async saveObservacao(treinadorId, alunoId, conteudo) {
     const row = { treinador_id: treinadorId, aluno_id: alunoId, conteudo, created_at: new Date().toISOString() };
-    // localStorage
-    const arr = TF.ls(`notas_${alunoId}`) || [];
-    arr.unshift(row);
-    TF.ls(`notas_${alunoId}`, arr);
-    // Supabase
-    if (TF.USE_SUPABASE && TF.sb) {
-      await TF.sb.from('notas_treinador').insert(row);
+    if (App.USE_SUPABASE && App.state.sb) {
+      await App.state.sb.from('observacoes_treinador').insert(row);
+    } else {
+      const arr = App.ls(`obs_${alunoId}`) || [];
+      arr.unshift(row);
+      App.ls(`obs_${alunoId}`, arr);
     }
   },
 };
 
-// ════════════════════════════════════════════════════════════
-// AUTH
-// ════════════════════════════════════════════════════════════
-TF.auth = {
-
-  /** Role selecionada no form de signup */
-  _selectedRole: 'aluno',
+/* ─── AUTH ─────────────────────────────────────────────────────── */
+App.auth = {
+  _role: 'aluno', // role selecionado no formulário
 
   init() {
-    this._setupRoleSelector();
-  },
-
-  _setupRoleSelector() {
-    document.querySelectorAll('.role-option').forEach(el => {
+    /* Selects de role */
+    document.querySelectorAll('.role-tab').forEach(el => {
       el.addEventListener('click', () => {
-        document.querySelectorAll('.role-option').forEach(o => o.classList.remove('selected'));
-        el.classList.add('selected');
-        this._selectedRole = el.dataset.role;
+        document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
+        el.classList.add('active');
+        this._role = el.dataset.role;
       });
     });
-    // Seleciona 'aluno' por default
-    document.querySelector('.role-option[data-role="aluno"]')?.classList.add('selected');
+    /* Botões show/hide senha */
+    document.querySelectorAll('[data-toggle-password]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.dataset.togglePassword;
+        const input    = document.getElementById(targetId);
+        if (!input) return;
+        const isText = input.type === 'text';
+        input.type   = isText ? 'password' : 'text';
+        btn.innerHTML = App.icons.get(isText ? 'eye' : 'eye-off', 18);
+        btn.setAttribute('aria-label', isText ? 'Mostrar senha' : 'Ocultar senha');
+      });
+    });
   },
 
-  toggleForm(mode) {
-    document.getElementById('login-form').classList.toggle('hidden', mode !== 'login');
-    document.getElementById('signup-form').classList.toggle('hidden', mode !== 'signup');
-  },
-
-  showError(formId, msg) {
+  _showError(formId, msg) {
     const el = document.getElementById(formId + '-error');
     if (!el) return;
     el.textContent = msg;
     el.classList.remove('hidden');
-    setTimeout(() => el.classList.add('hidden'), 5000);
+    setTimeout(() => el.classList.add('hidden'), 6000);
   },
 
+  /* LOGIN */
   async login() {
-    const email = document.getElementById('login-email').value.trim();
-    const pass  = document.getElementById('login-password').value;
-    if (!email || !pass) { this.showError('login','Preencha email e senha.'); return; }
+    const email = document.getElementById('login-email')?.value.trim();
+    const pass  = document.getElementById('login-password')?.value;
+    if (!email || !pass) { this._showError('login','Preencha todos os campos.'); return; }
+    if (!App.utils.isEmail(email)) { this._showError('login','Email inválido.'); return; }
 
-    TF.utils.setBtnLoading('btn-login', true);
+    App.utils.setBtnLoading('btn-login', true);
 
-    if (!TF.USE_SUPABASE) {
-      // Demo mode
-      const users = TF.ls('demo_users') || {};
+    if (!App.USE_SUPABASE) {
+      /* Modo offline (desenvolvimento local) */
+      const users = App.ls('local_users') || {};
       const u = users[email];
       if (!u || u.password !== pass) {
-        TF.utils.setBtnLoading('btn-login', false);
-        this.showError('login','Email ou senha incorretos.'); return;
+        App.utils.setBtnLoading('btn-login', false);
+        this._showError('login','Email ou senha incorretos.');
+        return;
       }
-      TF.state.user = { id:email, nome:u.nome, email, role:u.role, plan_type:'premium' };
-      TF.ls('demo_user', TF.state.user);
-      TF.utils.setBtnLoading('btn-login', false);
-      TF.app.enterApp();
+      App.state.user = { id: u.id, nome: u.nome, email, role: u.role, plan_type: 'premium' };
+      App.ls('current_user', App.state.user);
+      App.utils.setBtnLoading('btn-login', false);
+      App.boot.enterApp();
       return;
     }
 
-    const { data, error } = await TF.sb.auth.signInWithPassword({ email, password: pass });
-    TF.utils.setBtnLoading('btn-login', false);
-    if (error) { this.showError('login', error.message); return; }
-    const profile = await TF.data.getProfile(data.user.id);
-    TF.state.user = { ...data.user, ...profile };
-    TF.app.enterApp();
+    const { data, error } = await App.state.sb.auth.signInWithPassword({ email, password: pass });
+    App.utils.setBtnLoading('btn-login', false);
+
+    if (error) {
+      const msg = error.message.includes('Invalid') ? 'Email ou senha incorretos.' : error.message;
+      this._showError('login', msg);
+      return;
+    }
+
+    /* Verifica confirmação de email */
+    if (!data.user.email_confirmed_at) {
+      this._showError('login','Confirme seu email antes de entrar. Verifique sua caixa de entrada.');
+      await App.state.sb.auth.signOut();
+      return;
+    }
+
+    const profile = await App.data.getProfile(data.user.id);
+    App.state.user = { ...data.user, ...profile };
+    App.boot.enterApp();
   },
 
-  async signup() {
-    const nome  = document.getElementById('signup-nome').value.trim();
-    const email = document.getElementById('signup-email').value.trim();
-    const pass  = document.getElementById('signup-password').value;
-    const role  = this._selectedRole;
+  /* CADASTRO */
+  async register() {
+    const nome  = document.getElementById('reg-nome')?.value.trim();
+    const email = document.getElementById('reg-email')?.value.trim();
+    const pass  = document.getElementById('reg-password')?.value;
+    const role  = this._role;
 
-    if (!nome||!email||!pass) { this.showError('signup','Preencha todos os campos.'); return; }
-    if (pass.length < 6)       { this.showError('signup','Senha: mínimo 6 caracteres.'); return; }
-    if (!email.includes('@'))  { this.showError('signup','Email inválido.'); return; }
+    if (!nome || !email || !pass) { this._showError('register','Preencha todos os campos.'); return; }
+    if (!App.utils.isEmail(email)) { this._showError('register','Email inválido.'); return; }
+    if (pass.length < 6)           { this._showError('register','Senha deve ter no mínimo 6 caracteres.'); return; }
 
-    TF.utils.setBtnLoading('btn-signup', true);
+    App.utils.setBtnLoading('btn-register', true);
 
-    if (!TF.USE_SUPABASE) {
-      const users = TF.ls('demo_users') || {};
-      if (users[email]) { TF.utils.setBtnLoading('btn-signup',false); this.showError('signup','Email já cadastrado.'); return; }
+    if (!App.USE_SUPABASE) {
+      const users = App.ls('local_users') || {};
+      if (users[email]) { App.utils.setBtnLoading('btn-register',false); this._showError('register','Email já cadastrado.'); return; }
       const id = 'u_' + Date.now();
-      users[email] = { id, nome, password:pass, email, role, plan_type:'premium' };
-      TF.ls('demo_users', users);
-      TF.state.user = { id, nome, email, role, plan_type:'premium' };
-      TF.ls('demo_user', TF.state.user);
-      TF.utils.setBtnLoading('btn-signup', false);
-      TF.app.enterApp();
+      users[email] = { id, nome, password: pass, email, role, plan_type: 'premium' };
+      App.ls('local_users', users);
+      App.state.user = { id, nome, email, role, plan_type: 'premium' };
+      App.ls('current_user', App.state.user);
+      App.utils.setBtnLoading('btn-register', false);
+      App.boot.enterApp();
       return;
     }
 
-    const { data, error } = await TF.sb.auth.signUp({
+    const { data, error } = await App.state.sb.auth.signUp({
       email, password: pass,
       options: { data: { nome, role } },
     });
-    TF.utils.setBtnLoading('btn-signup', false);
-    if (error) { this.showError('signup', error.message); return; }
-    // Profile criado pelo trigger. Aguarda um tick:
-    setTimeout(async () => {
-      const profile = await TF.data.getProfile(data.user.id);
-      TF.state.user = { ...data.user, ...profile };
-      TF.app.enterApp();
-    }, 800);
+    App.utils.setBtnLoading('btn-register', false);
+    if (error) { this._showError('register', error.message); return; }
+
+    /* Sucesso — pede para confirmar email */
+    document.getElementById('register-form').classList.add('hidden');
+    document.getElementById('register-success').classList.remove('hidden');
+  },
+
+  /* ESQUECI MINHA SENHA */
+  async forgotPassword() {
+    const email = document.getElementById('forgot-email')?.value.trim();
+    if (!email) { this._showError('forgot','Informe seu email.'); return; }
+    if (!App.utils.isEmail(email)) { this._showError('forgot','Email inválido.'); return; }
+
+    App.utils.setBtnLoading('btn-forgot', true);
+
+    if (!App.USE_SUPABASE) {
+      App.utils.setBtnLoading('btn-forgot',false);
+      document.getElementById('forgot-form').classList.add('hidden');
+      document.getElementById('forgot-success').classList.remove('hidden');
+      return;
+    }
+
+    const { error } = await App.state.sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/?reset=true',
+    });
+    App.utils.setBtnLoading('btn-forgot', false);
+    if (error) { this._showError('forgot', error.message); return; }
+    document.getElementById('forgot-form').classList.add('hidden');
+    document.getElementById('forgot-success').classList.remove('hidden');
+  },
+
+  /* NOVA SENHA (após clicar no link do email) */
+  async updatePassword() {
+    const pass    = document.getElementById('newpass-password')?.value;
+    const confirm = document.getElementById('newpass-confirm')?.value;
+    if (!pass || pass.length < 6) { this._showError('newpass','Senha deve ter no mínimo 6 caracteres.'); return; }
+    if (pass !== confirm) { this._showError('newpass','As senhas não coincidem.'); return; }
+
+    App.utils.setBtnLoading('btn-newpass', true);
+    const { error } = await App.state.sb.auth.updateUser({ password: pass });
+    App.utils.setBtnLoading('btn-newpass', false);
+    if (error) { this._showError('newpass', error.message); return; }
+    App.utils.toast('Senha atualizada com sucesso!');
+    App.boot.navigateTo('dashboard');
   },
 
   async logout() {
-    if (TF.USE_SUPABASE && TF.sb) await TF.sb.auth.signOut();
-    ['demo_user','history','profile','aluno_perfil','medidas','best_streak']
-      .forEach(k => TF.ls(k, null));
-    TF.state.user = null;
-    TF.state.activeWorkout = null;
-    clearInterval(TF.state.clockInterval);
-    clearInterval(TF.state.restInterval);
-    TF.app.enterAuth();
+    if (App.USE_SUPABASE && App.state.sb) await App.state.sb.auth.signOut();
+    App.ls('current_user', null);
+    App.ls('history', null);
+    App.state.user = null;
+    App.state.workout = null;
+    App.boot.enterAuth('login');
   },
 
-  enterDemo() {
-    TF.state.user = { id:'demo', nome:'Demo', email:'demo@trainflow.app', role:'aluno', plan_type:'premium' };
-    TF.ls('demo_user', TF.state.user);
-    TF.app.enterApp();
-  },
-
-  /** Verifica se usuário tem plano premium */
-  isPremium() {
-    return TF.state.user?.plan_type === 'premium';
-  },
-
-  /** Verifica se é treinador */
-  isTrainer() {
-    return TF.state.user?.role === 'treinador';
-  },
+  isPremium() { return App.state.user?.plan_type === 'premium'; },
+  isTrainer()  { return App.state.user?.role === 'treinador'; },
 };
