@@ -2370,3 +2370,393 @@ App.views.student._renderScienceCardioSummary = function _renderScienceCardioSum
     </div>
   `;
 };
+
+/* -----------------------------------------------------------------
+   Complementos para sessões por dia/bloco e progressão por exercício.
+   ----------------------------------------------------------------- */
+App.views.student._groupWorkoutDays = function _groupWorkoutDays(treino, history = []) {
+  const groups = new Map();
+  const exercicios = (treino?.treino_exercicios || []).sort((a, b) => a.ordem - b.ordem);
+
+  exercicios.forEach((te, index) => {
+    const day = te.dia_semana || '';
+    const block = te.bloco_nome || '';
+    const key = `${day}__${block || 'principal'}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        day,
+        block,
+        label: App.utils.workoutBlockLabel(day, block || treino?.nome),
+        exercicios: [],
+        history,
+      });
+    }
+
+    groups.get(key).exercicios.push({ ...te, sessionOrder: index });
+  });
+
+  return Array.from(groups.values()).sort((a, b) => {
+    const byDay = App.utils.workoutDayOrder(a.day) - App.utils.workoutDayOrder(b.day);
+    if (byDay !== 0) return byDay;
+    return a.label.localeCompare(b.label);
+  });
+};
+
+App.views.student._exerciseProgress = function _exerciseProgress(te, history = []) {
+  const scoped = (history || []).filter((item) => {
+    if (item.exercicio_id !== te.exercicio_id) return false;
+    if (te.dia_semana && item.dia_semana && item.dia_semana !== te.dia_semana) return false;
+    if (te.bloco_nome && item.bloco_nome && item.bloco_nome !== te.bloco_nome) return false;
+    return true;
+  });
+
+  const fallback = scoped.length
+    ? scoped
+    : (history || []).filter((item) => item.exercicio_id === te.exercicio_id);
+
+  const sorted = [...fallback].sort((a, b) => {
+    const dateA = `${a.data || a.date || ''}${a.created_at || ''}`;
+    const dateB = `${b.data || b.date || ''}${b.created_at || ''}`;
+    return dateA < dateB ? 1 : -1;
+  });
+
+  const latest = sorted[0] || null;
+  const best = [...fallback].sort((a, b) => (Number(b.carga) || 0) - (Number(a.carga) || 0))[0] || null;
+
+  return { latest, best };
+};
+
+App.views.student._extractRepHint = function _extractRepHint(repString) {
+  const match = String(repString || '').match(/\d+/);
+  return match ? Number(match[0]) : 0;
+};
+
+App.views.student._ensureWorkoutSessionModal = function _ensureWorkoutSessionModal() {
+  if (document.getElementById('modal-workout-session')) return;
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `
+    <div id="modal-workout-session" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop"></div>
+      <div class="modal-card modal-wide" role="dialog" aria-modal="true" aria-labelledby="modal-workout-session-title">
+        <div class="modal-header">
+          <h3 class="modal-title" id="modal-workout-session-title">Iniciar sessão</h3>
+          <button class="modal-close" type="button" onclick="closeModal()" aria-label="Fechar">×</button>
+        </div>
+        <div class="modal-body">
+          <div id="workout-session-content"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" type="button" onclick="closeModal()">Cancelar</button>
+          <button class="btn btn-primary" type="button" onclick="saveModal()">Salvar sessão</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(wrapper.firstElementChild);
+};
+
+App.views.student.renderTreino = async function renderTreino() {
+  const el = document.getElementById('treino-content');
+  if (!el) return;
+
+  const treino = App.state.workout;
+
+  if (!treino) {
+    el.innerHTML = `
+      <div class="empty-state large">
+        <div class="empty-icon">${App.icons.get('dumbbell', 48)}</div>
+        <h2>Sem treino atribuído</h2>
+        <p>Seu treinador ainda não criou um treino para você. Quando houver um treino ativo, ele aparecerá aqui automaticamente.</p>
+      </div>
+    `;
+    return;
+  }
+
+  this._ensureWorkoutSessionModal();
+
+  const history = await App.data.getHistory(App.state.user?.id);
+  const groupedSessions = this._groupWorkoutDays(treino, history);
+  const totalExercises = groupedSessions.reduce((sum, item) => sum + item.exercicios.length, 0);
+
+  el.innerHTML = `
+    <div class="treino-header">
+      <div class="treino-title-block">
+        <h2>${App.utils.esc(treino.nome)}</h2>
+        ${treino.descricao ? `<p class="treino-desc">${App.utils.esc(treino.descricao)}</p>` : ''}
+      </div>
+      <div class="treino-meta">
+        <span class="badge badge-primary">${App.icons.get('calendar-check', 13)} ${groupedSessions.length} sessões</span>
+        <span class="badge badge-neutral">${App.icons.get('dumbbell', 13)} ${totalExercises} exercícios</span>
+      </div>
+    </div>
+
+    <div class="exercise-quick-guide-grid">
+      ${treinoQuickGuides.map((item) => `
+        <article class="exercise-quick-guide">
+          <div class="exercise-quick-guide-head">
+            <span class="exercise-quick-guide-icon">${App.icons.get(item.icone, 16)}</span>
+            <strong>${App.utils.esc(item.titulo)}</strong>
+          </div>
+          <p>${App.utils.esc(item.texto)}</p>
+        </article>
+      `).join('')}
+    </div>
+
+    <div class="workout-day-list">
+      ${groupedSessions.map((session, sessionIndex) => {
+        const sessionId = `session-${sessionIndex}`;
+        return `
+          <section class="workout-day-card">
+            <div class="workout-day-head">
+              <div>
+                <div class="section-label">${App.utils.esc(session.day || 'Treino')}</div>
+                <h3>${App.utils.esc(session.block || session.label)}</h3>
+                <p class="workout-day-copy">${session.exercicios.length} exercícios planejados para esta sessão.</p>
+              </div>
+              <button class="btn btn-primary btn-sm" type="button" onclick="App.views.student._openWorkoutDaySession('${session.key}')">
+                ${App.icons.get('play-circle', 14)} Iniciar treino
+              </button>
+            </div>
+
+            <div class="exercise-list" id="${sessionId}">
+              ${session.exercicios.map((te, i) => this._buildExerciseCard(te, i, history)).join('')}
+            </div>
+          </section>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  this._workoutSessions = groupedSessions;
+};
+
+App.views.student._buildExerciseCard = function _buildExerciseCard(te, idx, history = []) {
+  const ex = te.exercicios || {};
+  const typeLabel = App.utils.getExerciseTypeLabel(ex.tipo);
+  const normalizedGroup = App.utils.normalizeMuscleGroup(ex.grupo_muscular);
+  const videoUrl = App.utils.sanitizeUrl(ex.video_url);
+  const scientificNote = ex.observacao_cientifica || '';
+  const progress = this._exerciseProgress(te, history);
+
+  return `
+    <div class="exercise-card" id="ex-card-${te.id}">
+      <div class="ex-card-header" onclick="App.views.student._toggleExCard(${te.id})">
+        <div class="ex-card-left">
+          <span class="ex-num">${idx + 1}</span>
+          <div>
+            <div class="exercise-title-inline">
+              <div class="ex-name">${App.utils.esc(ex.nome || 'Exercício')}</div>
+              ${videoUrl ? `
+                <a
+                  class="btn-video-inline"
+                  href="${App.utils.esc(videoUrl)}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onclick="event.stopPropagation()"
+                >
+                  ${App.icons.get('play-circle', 13)} Ver execução
+                </a>
+              ` : ''}
+            </div>
+            <div class="ex-meta">
+              <span class="badge-sm badge-muscle">${App.utils.esc(normalizedGroup)}</span>
+              <span class="badge-sm badge-type">${App.utils.esc(typeLabel)}</span>
+              ${progress.latest ? `<span class="badge-sm badge-primary">${App.icons.get('activity', 12)} última: ${Number(progress.latest.carga) || 0}kg</span>` : ''}
+            </div>
+          </div>
+        </div>
+
+        <div class="ex-card-right">
+          <div class="ex-sets">${te.series}×${App.utils.esc(te.repeticoes)}</div>
+          <span class="ex-expand-icon" id="ex-icon-${te.id}">
+            ${App.icons.get('chevron-down', 16)}
+          </span>
+        </div>
+      </div>
+
+      <div class="ex-card-body hidden" id="ex-body-${te.id}">
+        <div class="ex-details-grid">
+          <div class="ex-detail-item">
+            <div class="ex-detail-label">Grupo muscular</div>
+            <div class="ex-detail-val">${App.utils.esc(normalizedGroup)}</div>
+          </div>
+
+          <div class="ex-detail-item">
+            <div class="ex-detail-label">Tipo</div>
+            <div class="ex-detail-val">${App.utils.esc(typeLabel)}</div>
+          </div>
+
+          <div class="ex-detail-item">
+            <div class="ex-detail-label">Séries</div>
+            <div class="ex-detail-val">${te.series}</div>
+          </div>
+
+          <div class="ex-detail-item">
+            <div class="ex-detail-label">Repetições</div>
+            <div class="ex-detail-val">${App.utils.esc(te.repeticoes)}</div>
+          </div>
+
+          <div class="ex-detail-item">
+            <div class="ex-detail-label">Descanso</div>
+            <div class="ex-detail-val">${App.utils.esc(te.descanso || '60s')}</div>
+          </div>
+
+          ${te.observacoes ? `
+            <div class="ex-detail-item ex-detail-wide">
+              <div class="ex-detail-label">Observações do treinador</div>
+              <div class="ex-detail-val">${App.utils.esc(te.observacoes)}</div>
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="exercise-progress-row">
+          <div class="exercise-progress-card">
+            <div class="ex-detail-label">Último registro</div>
+            <div class="exercise-progress-value">${progress.latest ? `${Number(progress.latest.carga) || 0}kg × ${Number(progress.latest.reps) || 0}` : 'Sem histórico'}</div>
+          </div>
+          <div class="exercise-progress-card">
+            <div class="ex-detail-label">Melhor carga</div>
+            <div class="exercise-progress-value">${progress.best ? `${Number(progress.best.carga) || 0}kg` : 'Sem PR'}</div>
+          </div>
+        </div>
+
+        ${ex.execucao ? `
+          <div class="exercise-note-card">
+            <div class="exercise-note-head">
+              <span class="exercise-note-icon">${App.icons.get('activity', 14)}</span>
+              <strong>Dica de execução</strong>
+            </div>
+            <p>${App.utils.esc(ex.execucao)}</p>
+          </div>
+        ` : ''}
+
+        ${ex.equipamento ? `
+          <div class="exercise-note-card">
+            <div class="exercise-note-head">
+              <span class="exercise-note-icon">${App.icons.get('gauge', 14)}</span>
+              <strong>Equipamento</strong>
+            </div>
+            <p>${App.utils.esc(ex.equipamento)}</p>
+          </div>
+        ` : ''}
+
+        ${scientificNote ? `
+          <div class="exercise-note-card scientific">
+            <div class="exercise-note-head">
+              <span class="exercise-note-icon">${App.icons.get('book-open', 14)}</span>
+              <strong>Observação científica</strong>
+            </div>
+            <p>${App.utils.esc(scientificNote)}</p>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+};
+
+App.views.student._openWorkoutDaySession = function _openWorkoutDaySession(sessionKey) {
+  this._ensureWorkoutSessionModal();
+
+  const session = (this._workoutSessions || []).find((item) => item.key === sessionKey);
+  if (!session) return;
+
+  App.state.workoutSession = session;
+  const content = document.getElementById('workout-session-content');
+  if (!content) return;
+
+  content.innerHTML = `
+    <div class="session-modal-head">
+      <div>
+        <div class="section-label">${App.utils.esc(session.day || 'Sessão')}</div>
+        <h3>${App.utils.esc(session.block || session.label)}</h3>
+        <p class="workout-day-copy">Registre carga, reps e séries feitas em cada exercício.</p>
+      </div>
+      <span class="badge badge-neutral">${session.exercicios.length} exercícios</span>
+    </div>
+
+    <div class="session-log-list">
+      ${session.exercicios.map((te, index) => {
+        const ex = te.exercicios || {};
+        const progress = this._exerciseProgress(te, session.history || []);
+        const defaultReps = progress.latest?.reps || this._extractRepHint(te.repeticoes);
+        const defaultSeries = progress.latest?.series || te.series || 0;
+
+        return `
+          <div class="session-log-item">
+            <div class="session-log-top">
+              <div>
+                <strong>${index + 1}. ${App.utils.esc(ex.nome || 'Exercício')}</strong>
+                <div class="draft-item-meta">
+                  Planejado: ${te.series}×${App.utils.esc(te.repeticoes)} • descanso ${App.utils.esc(te.descanso || '60s')}
+                </div>
+              </div>
+              ${progress.latest ? `<span class="badge-sm badge-primary">${Number(progress.latest.carga) || 0}kg × ${Number(progress.latest.reps) || 0}</span>` : ''}
+            </div>
+            <div class="session-log-grid">
+              <div class="form-group">
+                <label>Carga (kg)</label>
+                <input class="input-sm" type="number" min="0" step="0.5" id="ws-carga-${te.id}" value="${progress.latest?.carga || ''}">
+              </div>
+              <div class="form-group">
+                <label>Reps</label>
+                <input class="input-sm" type="number" min="0" step="1" id="ws-reps-${te.id}" value="${defaultReps || ''}">
+              </div>
+              <div class="form-group">
+                <label>Séries feitas</label>
+                <input class="input-sm" type="number" min="0" step="1" id="ws-series-${te.id}" value="${defaultSeries || ''}">
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  App.modal.open('modal-workout-session', `Iniciar ${session.label}`, () => this._saveWorkoutDaySession(), { wide: true });
+};
+
+App.views.student._saveWorkoutDaySession = async function _saveWorkoutDaySession() {
+  const session = App.state.workoutSession;
+  if (!session) return;
+
+  const entries = session.exercicios
+    .map((te) => {
+      const ex = te.exercicios || {};
+      const carga = Number(document.getElementById(`ws-carga-${te.id}`)?.value || 0);
+      const reps = Number(document.getElementById(`ws-reps-${te.id}`)?.value || 0);
+      const series = Number(document.getElementById(`ws-series-${te.id}`)?.value || 0);
+
+      if (!carga && !reps && !series) return null;
+
+      return {
+        treino_id: te.treino_id || App.state.workout?.id || null,
+        exercicio_id: te.exercicio_id,
+        exercicio_nome: ex.nome || 'Exercício',
+        dia_semana: te.dia_semana || null,
+        bloco_nome: te.bloco_nome || null,
+        carga,
+        reps,
+        series,
+        data: App.utils.today(),
+      };
+    })
+    .filter(Boolean);
+
+  if (!entries.length) {
+    App.utils.toast('Preencha pelo menos um exercício para salvar a sessão.', 'warn');
+    return;
+  }
+
+  for (const entry of entries) {
+    await App.data.saveSession(entry);
+  }
+
+  App.modal.close();
+  App.state.workoutSession = null;
+  App.utils.toast('Sessão registrada com sucesso!');
+  await this.renderTreino();
+};

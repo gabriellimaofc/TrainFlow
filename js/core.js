@@ -286,6 +286,17 @@ App.utils = {
     return App.EXERCISE_TYPES[type] || type || '—';
   },
 
+  /* Ordena os blocos semanais na UI de forma previsível. */
+  workoutDayOrder(day) {
+    const index = App.WORKOUT_DAY_OPTIONS.indexOf(day);
+    return index === -1 ? 999 : index;
+  },
+
+  workoutBlockLabel(day, block) {
+    if (day && block) return `${day} • ${block}`;
+    return day || block || 'Treino principal';
+  },
+
   /* Protege links externos antes de renderizar ou abrir em nova aba. */
   sanitizeUrl(url) {
     const value = String(url || '').trim();
@@ -489,6 +500,8 @@ App.data = {
         treino_id: entry.treino_id || null,
         exercicio_id: entry.exercicio_id || null,
         exercicio_nome: entry.exercicio_nome,
+        dia_semana: entry.dia_semana || null,
+        bloco_nome: entry.bloco_nome || null,
         carga: entry.carga || 0,
         reps: entry.reps || 0,
         series: entry.series || 0,
@@ -692,6 +705,8 @@ App.data = {
     const rows = exercicios.map((ex, i) => ({
       treino_id: treino.id,
       exercicio_id: ex.exercicio_id,
+      dia_semana: ex.dia_semana || null,
+      bloco_nome: ex.bloco_nome || null,
       series: Number(ex.series) || 3,
       repeticoes: ex.repeticoes || '10-12',
       descanso: ex.descanso || '60s',

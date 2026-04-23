@@ -211,6 +211,8 @@ create table if not exists public.treino_exercicios (
   id            bigserial primary key,
   treino_id     bigint not null references public.treinos(id) on delete cascade,
   exercicio_id  bigint not null references public.exercicios(id) on delete restrict,
+  dia_semana    text,
+  bloco_nome    text,
   series        smallint not null default 3,
   repeticoes    text not null default '10-12',
   descanso      text not null default '60s',
@@ -222,6 +224,9 @@ create table if not exists public.treino_exercicios (
 
 create index if not exists idx_treino_exercicios_treino_ordem
   on public.treino_exercicios (treino_id, ordem);
+
+alter table public.treino_exercicios add column if not exists dia_semana text;
+alter table public.treino_exercicios add column if not exists bloco_nome text;
 
 -- ================================================================
 -- TABELA: OBSERVACOES_TREINADOR
@@ -246,6 +251,8 @@ create table if not exists public.historico_treino (
   treino_id       bigint references public.treinos(id) on delete set null,
   exercicio_id    bigint references public.exercicios(id) on delete set null,
   exercicio_nome  text,
+  dia_semana      text,
+  bloco_nome      text,
   carga           numeric(6,2) default 0,
   reps            smallint default 0,
   series          smallint default 0,
@@ -258,6 +265,9 @@ create index if not exists idx_hist_user_data
 
 create index if not exists idx_hist_user_exercicio
   on public.historico_treino (user_id, exercicio_id);
+
+alter table public.historico_treino add column if not exists dia_semana text;
+alter table public.historico_treino add column if not exists bloco_nome text;
 
 -- ================================================================
 -- RLS

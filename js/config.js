@@ -94,6 +94,8 @@ App.EXERCISE_TYPES = {
 };
 
 App.REST_OPTIONS = ['30s', '45s', '60s', '75s', '90s', '2 min', '3 min'];
+App.WORKOUT_DAY_OPTIONS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+App.WORKOUT_BLOCK_OPTIONS = ['Lower A', 'Upper Push', 'Lower B', 'Upper Pull', 'Lower C', 'Extra', 'Cardio'];
 
 /* ================================================================
    ESTADO GLOBAL DA SPA
@@ -106,6 +108,7 @@ App.state = {
   selectedAluno: null,
   exerciseList: [],
   workoutDraft: [],
+  workoutSession: null,
   charts: {},
 };
 

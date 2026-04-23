@@ -756,7 +756,8 @@ App.views.trainer._renderExerciseLibrary = function _renderExerciseLibrary(exerc
 };
 
 App.views.trainer._buildExerciseGridCard = function _buildExerciseGridCard(ex) {
-  const selected = App.state.workoutDraft.some((item) => item.exercicio_id === ex.id);
+  const selectedCount = App.state.workoutDraft.filter((item) => item.exercicio_id === ex.id).length;
+  const selected = selectedCount > 0;
   const group = App.utils.normalizeMuscleGroup(ex.grupo_muscular);
   const tipPreview = (ex.execucao || 'Execução guiada e amplitude controlada.').trim();
   const typeLabel = App.utils.getExerciseTypeLabel(ex.tipo);
@@ -774,6 +775,7 @@ App.views.trainer._buildExerciseGridCard = function _buildExerciseGridCard(ex) {
         <span class="exercise-grid-icon">${App.icons.get(this._iconForGroup(ex.grupo_muscular), 16)}</span>
         <div class="exercise-grid-badges">
           <span class="badge-sm badge-type">${App.utils.esc(typeLabel)}</span>
+          ${selectedCount ? `<span class="badge-sm badge-primary">${App.icons.get('check-circle', 12)} ${selectedCount}x</span>` : ''}
           ${ex.video_url ? `<span class="badge-sm badge-video">${App.icons.get('play-circle', 12)} vídeo</span>` : ''}
         </div>
       </div>
@@ -815,13 +817,6 @@ App.views.trainer.addExerciseToDraft = function addExerciseToDraft(exercicioId) 
   const ex = (App.state.exerciseList || []).find((item) => item.id === exercicioId);
   if (!ex) return;
 
-  const alreadySelected = App.state.workoutDraft.some((item) => item.exercicio_id === ex.id);
-  if (alreadySelected) {
-    App.utils.toast(`${ex.nome} já está no rascunho.`, 'info', 1800);
-    this.scrollToDraft();
-    return;
-  }
-
   App.state.workoutDraft.push({
     exercicio_id: ex.id,
     nome: ex.nome,
@@ -831,6 +826,8 @@ App.views.trainer.addExerciseToDraft = function addExerciseToDraft(exercicioId) 
     equipamento: ex.equipamento || '',
     observacao_cientifica: ex.observacao_cientifica || '',
     video_url: ex.video_url || '',
+    dia_semana: App.WORKOUT_DAY_OPTIONS[0],
+    bloco_nome: App.WORKOUT_BLOCK_OPTIONS[0],
     series: 3,
     repeticoes: '8-12',
     descanso: '60s',
@@ -839,7 +836,7 @@ App.views.trainer.addExerciseToDraft = function addExerciseToDraft(exercicioId) 
 
   this.renderDraft();
   this._renderExerciseLibrary(App.state.exerciseList || []);
-  App.utils.toast(`${ex.nome} adicionado ao treino.`, 'success', 1800);
+  App.utils.toast(`${ex.nome} adicionado ao treino. Defina o dia e o bloco no rascunho.`, 'success', 2000);
 };
 
 App.views.trainer.renderDraft = function renderDraft() {
@@ -900,6 +897,18 @@ App.views.trainer.renderDraft = function renderDraft() {
 
         <div class="draft-grid">
           <div class="form-group">
+            <label>Dia</label>
+            <select class="input-sm" onchange="App.views.trainer.updateDraftField(${i}, 'dia_semana', this.value)">
+              ${App.WORKOUT_DAY_OPTIONS.map((day) => `<option value="${day}" ${day === (ex.dia_semana || App.WORKOUT_DAY_OPTIONS[0]) ? 'selected' : ''}>${day}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Bloco</label>
+            <select class="input-sm" onchange="App.views.trainer.updateDraftField(${i}, 'bloco_nome', this.value)">
+              ${App.WORKOUT_BLOCK_OPTIONS.map((block) => `<option value="${block}" ${block === (ex.bloco_nome || App.WORKOUT_BLOCK_OPTIONS[0]) ? 'selected' : ''}>${block}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
             <label>Séries</label>
             <input class="input-sm" type="number" min="1" value="${ex.series}" onchange="App.views.trainer.updateDraftField(${i}, 'series', this.value)">
           </div>
@@ -958,6 +967,7 @@ App.modal = {
 
     document.body.style.overflow = '';
     this._currentSave = null;
+    if (App.state) App.state.workoutSession = null;
   },
 
   save() {

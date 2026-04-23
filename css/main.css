@@ -2700,6 +2700,80 @@ select option {
   border-color: rgba(59, 130, 246, 0.2);
 }
 
+.workout-day-list {
+  display: grid;
+  gap: 18px;
+}
+
+.workout-day-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 16px;
+}
+
+.workout-day-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.workout-day-copy {
+  color: var(--text-3);
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.exercise-progress-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.exercise-progress-card,
+.session-log-item {
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+}
+
+.exercise-progress-value {
+  font-weight: 700;
+}
+
+.session-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.session-log-list {
+  display: grid;
+  gap: 12px;
+}
+
+.session-log-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.session-log-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
 .exercise-note-head,
 .exercise-reference-badges,
 .exercise-grid-badges,
@@ -2895,6 +2969,11 @@ select option {
   }
 
   .exercise-quick-guide-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .exercise-progress-row,
+  .session-log-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 

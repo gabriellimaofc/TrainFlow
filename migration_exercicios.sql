@@ -9,6 +9,10 @@
 
 alter table public.exercicios add column if not exists video_url text;
 alter table public.exercicios add column if not exists observacao_cientifica text;
+alter table public.treino_exercicios add column if not exists dia_semana text;
+alter table public.treino_exercicios add column if not exists bloco_nome text;
+alter table public.historico_treino add column if not exists dia_semana text;
+alter table public.historico_treino add column if not exists bloco_nome text;
 
 with seed_exercicios (
   nome,
