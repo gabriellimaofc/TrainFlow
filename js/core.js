@@ -283,101 +283,140 @@ async vincularAluno(treinadorId, alunoEmail) {
 
 /* ─── AUTH ─────────────────────────────────────────────────────── */
 App.auth = {
-  _role: 'aluno', // role selecionado no formulário
+  _role: 'aluno',
 
   init() {
-    /* Selects de role */
-    document.querySelectorAll('.role-tab').forEach(el => {
-      el.addEventListener('click', () => {
-        document.querySelectorAll('.role-tab').forEach(t => t.classList.remove('active'));
-        el.classList.add('active');
-        this._role = el.dataset.role;
-      });
-    });
-    /* Botões show/hide senha */
-    document.querySelectorAll('[data-toggle-password]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const targetId = btn.dataset.togglePassword;
-        const input    = document.getElementById(targetId);
-        if (!input) return;
-        const isText = input.type === 'text';
-        input.type   = isText ? 'password' : 'text';
-        btn.innerHTML = App.icons.get(isText ? 'eye' : 'eye-off', 18);
-        btn.setAttribute('aria-label', isText ? 'Mostrar senha' : 'Ocultar senha');
+    this._bindRoleTabs();
+    this._bindPasswordToggles();
+  },
+
+  _bindRoleTabs() {
+    document.querySelectorAll('.role-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.role-tab').forEach(t => {
+          t.classList.remove('active');
+          t.setAttribute('aria-checked', 'false');
+        });
+        tab.classList.add('active');
+        tab.setAttribute('aria-checked', 'true');
+        this._role = tab.dataset.role || 'aluno';
       });
     });
   },
 
-  _showError(formId, msg) {
-    const el = document.getElementById(formId + '-error');
-    if (!el) return;
-    el.textContent = msg;
-    el.classList.remove('hidden');
-    setTimeout(() => el.classList.add('hidden'), 6000);
+  _bindPasswordToggles() {
+    document.querySelectorAll('[data-toggle-password]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-toggle-password');
+        const input = document.getElementById(id);
+        if (!input) return;
+        input.type = input.type === 'password' ? 'text' : 'password';
+        btn.innerHTML = App.icons.get(input.type === 'password' ? 'eye' : 'eye-off', 18);
+      });
+    });
+  },
+
+  _showError(type, msg) {
+    const box = document.getElementById(`${type}-error`);
+    const text = document.getElementById(`${type}-error-msg`);
+    if (text) text.textContent = msg;
+    if (box) box.classList.remove('hidden');
+  },
+
+  _hideError(type) {
+    const box = document.getElementById(`${type}-error`);
+    if (box) box.classList.add('hidden');
   },
 
   /* LOGIN */
   async login() {
-    const email = document.getElementById('login-email')?.value.trim();
+    const email = document.getElementById('login-email')?.value.trim().toLowerCase();
     const pass  = document.getElementById('login-password')?.value;
-    if (!email || !pass) { this._showError('login','Preencha todos os campos.'); return; }
-    if (!App.utils.isEmail(email)) { this._showError('login','Email inválido.'); return; }
 
-    App.utils.setBtnLoading('btn-login', true);
+    this._hideError('login');
+
+    if (!email || !pass) {
+      this._showError('login', 'Informe email e senha.');
+      return;
+    }
 
     if (!App.USE_SUPABASE) {
-      /* Modo offline (desenvolvimento local) */
       const users = App.ls('local_users') || {};
-      const u = users[email];
-      if (!u || u.password !== pass) {
-        App.utils.setBtnLoading('btn-login', false);
-        this._showError('login','Email ou senha incorretos.');
+      const user = users[email];
+      if (!user || user.password !== pass) {
+        this._showError('login', 'Email ou senha inválidos.');
         return;
       }
-      App.state.user = { id: u.id, nome: u.nome, email, role: u.role, plan_type: 'premium' };
-      App.ls('current_user', App.state.user);
-      App.utils.setBtnLoading('btn-login', false);
+      App.state.user = user;
+      App.ls('current_user', user);
       App.boot.enterApp();
       return;
     }
 
-    const { data, error } = await App.state.sb.auth.signInWithPassword({ email, password: pass });
+    App.utils.setBtnLoading('btn-login', true);
+
+    const { data, error } = await App.state.sb.auth.signInWithPassword({
+      email,
+      password: pass
+    });
+
     App.utils.setBtnLoading('btn-login', false);
 
     if (error) {
-      const msg = error.message.includes('Invalid') ? 'Email ou senha incorretos.' : error.message;
-      this._showError('login', msg);
+      this._showError('login', error.message);
       return;
     }
 
-    /* Verifica confirmação de email */
-    if (!data.user.email_confirmed_at) {
-      this._showError('login','Confirme seu email antes de entrar. Verifique sua caixa de entrada.');
-      await App.state.sb.auth.signOut();
+    const user = data?.user;
+    if (!user) {
+      this._showError('login', 'Não foi possível iniciar sessão.');
       return;
     }
 
-    const profile = await App.data.getProfile(data.user.id);
-    App.state.user = { ...data.user, ...profile };
+    if (!user.email_confirmed_at) {
+      this._showError('login', 'Confirme seu email antes de entrar.');
+      return;
+    }
+
+    const profile = await App.data.getProfile(user.id);
+    App.state.user = { ...user, ...profile };
     App.boot.enterApp();
   },
 
   /* CADASTRO */
   async register() {
     const nome  = document.getElementById('reg-nome')?.value.trim();
-    const email = document.getElementById('reg-email')?.value.trim();
+    const email = document.getElementById('reg-email')?.value.trim().toLowerCase();
     const pass  = document.getElementById('reg-password')?.value;
     const role  = this._role;
 
-    if (!nome || !email || !pass) { this._showError('register','Preencha todos os campos.'); return; }
-    if (!App.utils.isEmail(email)) { this._showError('register','Email inválido.'); return; }
-    if (pass.length < 6)           { this._showError('register','Senha deve ter no mínimo 6 caracteres.'); return; }
+    this._hideError('register');
+
+    if (!nome || !email || !pass) {
+      this._showError('register', 'Preencha todos os campos.');
+      return;
+    }
+
+    if (!App.utils.isEmail(email)) {
+      this._showError('register', 'Email inválido.');
+      return;
+    }
+
+    if (pass.length < 6) {
+      this._showError('register', 'Senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
 
     App.utils.setBtnLoading('btn-register', true);
 
     if (!App.USE_SUPABASE) {
       const users = App.ls('local_users') || {};
-      if (users[email]) { App.utils.setBtnLoading('btn-register',false); this._showError('register','Email já cadastrado.'); return; }
+      if (users[email]) {
+        App.utils.setBtnLoading('btn-register', false);
+        this._showError('register', 'Email já cadastrado.');
+        return;
+      }
+
       const id = 'u_' + Date.now();
       users[email] = { id, nome, password: pass, email, role, plan_type: 'premium' };
       App.ls('local_users', users);
@@ -388,59 +427,133 @@ App.auth = {
       return;
     }
 
-    const { data, error } = await App.state.sb.auth.signUp({
-      email, password: pass,
-      options: { data: { nome, role } },
+    const { error } = await App.state.sb.auth.signUp({
+      email,
+      password: pass,
+      options: {
+        data: { nome, role },
+        emailRedirectTo: `${window.location.origin}/`
+      }
     });
-    App.utils.setBtnLoading('btn-register', false);
-    if (error) { this._showError('register', error.message); return; }
 
-    /* Sucesso — pede para confirmar email */
-    document.getElementById('register-form').classList.add('hidden');
-    document.getElementById('register-success').classList.remove('hidden');
+    App.utils.setBtnLoading('btn-register', false);
+
+    if (error) {
+      this._showError('register', error.message);
+      return;
+    }
+
+    document.getElementById('register-form')?.classList.add('hidden');
+    document.getElementById('register-success')?.classList.remove('hidden');
   },
 
   /* ESQUECI MINHA SENHA */
   async forgotPassword() {
-    const email = document.getElementById('forgot-email')?.value.trim();
-    if (!email) { this._showError('forgot','Informe seu email.'); return; }
-    if (!App.utils.isEmail(email)) { this._showError('forgot','Email inválido.'); return; }
+    const email = document.getElementById('forgot-email')?.value.trim().toLowerCase();
+
+    this._hideError('forgot');
+
+    if (!email) {
+      this._showError('forgot', 'Informe seu email.');
+      return;
+    }
+
+    if (!App.utils.isEmail(email)) {
+      this._showError('forgot', 'Email inválido.');
+      return;
+    }
 
     App.utils.setBtnLoading('btn-forgot', true);
 
     if (!App.USE_SUPABASE) {
-      App.utils.setBtnLoading('btn-forgot',false);
-      document.getElementById('forgot-form').classList.add('hidden');
-      document.getElementById('forgot-success').classList.remove('hidden');
+      App.utils.setBtnLoading('btn-forgot', false);
+      document.getElementById('forgot-form')?.classList.add('hidden');
+      document.getElementById('forgot-success')?.classList.remove('hidden');
       return;
     }
 
     const { error } = await App.state.sb.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/?reset=true',
+      redirectTo: `${window.location.origin}/`
     });
+
     App.utils.setBtnLoading('btn-forgot', false);
-    if (error) { this._showError('forgot', error.message); return; }
-    document.getElementById('forgot-form').classList.add('hidden');
-    document.getElementById('forgot-success').classList.remove('hidden');
+
+    if (error) {
+      this._showError('forgot', error.message);
+      return;
+    }
+
+    document.getElementById('forgot-form')?.classList.add('hidden');
+    document.getElementById('forgot-success')?.classList.remove('hidden');
   },
 
-  /* NOVA SENHA (após clicar no link do email) */
+  /* NOVA SENHA */
   async updatePassword() {
-    const pass    = document.getElementById('newpass-password')?.value;
+    const pass = document.getElementById('newpass-password')?.value;
     const confirm = document.getElementById('newpass-confirm')?.value;
-    if (!pass || pass.length < 6) { this._showError('newpass','Senha deve ter no mínimo 6 caracteres.'); return; }
-    if (pass !== confirm) { this._showError('newpass','As senhas não coincidem.'); return; }
+
+    this._hideError('newpass');
+
+    if (!pass || pass.length < 6) {
+      this._showError('newpass', 'Senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+
+    if (pass !== confirm) {
+      this._showError('newpass', 'As senhas não coincidem.');
+      return;
+    }
 
     App.utils.setBtnLoading('btn-newpass', true);
-    const { error } = await App.state.sb.auth.updateUser({ password: pass });
+
+    const { error } = await App.state.sb.auth.updateUser({
+      password: pass
+    });
+
     App.utils.setBtnLoading('btn-newpass', false);
-    if (error) { this._showError('newpass', error.message); return; }
+
+    if (error) {
+      this._showError('newpass', error.message);
+      return;
+    }
+
     App.utils.toast('Senha atualizada com sucesso!');
-    App.boot.navigateTo('dashboard');
+    App.boot.enterAuth('login');
+  },
+
+  /* REENVIAR EMAIL DE CONFIRMAÇÃO */
+  async resendConfirmationEmail() {
+    const email =
+      document.getElementById('reg-email')?.value.trim().toLowerCase() ||
+      document.getElementById('login-email')?.value.trim().toLowerCase();
+
+    this._hideError('register');
+
+    if (!email) {
+      this._showError('register', 'Informe o email.');
+      return;
+    }
+
+    const { error } = await App.state.sb.auth.resend({
+      type: 'signup',
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/`
+      }
+    });
+
+    if (error) {
+      this._showError('register', error.message);
+      return;
+    }
+
+    App.utils.toast('Email de confirmação reenviado.');
   },
 
   async logout() {
-    if (App.USE_SUPABASE && App.state.sb) await App.state.sb.auth.signOut();
+    if (App.USE_SUPABASE && App.state.sb) {
+      await App.state.sb.auth.signOut();
+    }
     App.ls('current_user', null);
     App.ls('history', null);
     App.state.user = null;
@@ -449,5 +562,6 @@ App.auth = {
   },
 
   isPremium() { return App.state.user?.plan_type === 'premium'; },
-  isTrainer()  { return App.state.user?.role === 'treinador'; },
+  isTrainer() { return App.state.user?.role === 'treinador'; },
 };
+window.handleResendConfirmation = () => App.auth.resendConfirmationEmail();
