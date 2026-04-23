@@ -9,9 +9,9 @@ window.App = window.App || {};
    Substitua com seus valores do Supabase Dashboard:
    Project Settings → API
    ─────────────────────────────────────────────────────────────── */
-App.SUPABASE_URL = '';
-App.SUPABASE_KEY = '';
-App.USE_SUPABASE  = App.SUPABASE_URL !== '';
+App.SUPABASE_URL = 'https://wmwfntlbkdsfscceavpa.supabase.co';
+App.SUPABASE_KEY = 'sb_publishable_8lOVmR3mPkFrkpblr7FNSA_VmND0ajf';
+App.USE_SUPABASE  = App.SUPABASE_URL !== 'https://wmwfntlbkdsfscceavpa.supabase.co';
 
 /* ── Planos ──────────────────────────────────────────────────── */
 App.PLANS = {
