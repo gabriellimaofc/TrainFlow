@@ -1,466 +1,410 @@
-/* ============================================================
-   TrainFlow v2 — js/views/trainer.js + js/workout.js
-   Área do treinador e motor de treino ativo.
-   ============================================================ */
+/* =================================================================
+   views/trainer.js — Área completa do treinador
+   Compatível com App.*
+   ================================================================= */
 
-// ════════════════════════════════════════════════════════════
-// TRAINER VIEWS
-// ════════════════════════════════════════════════════════════
-TF.views = TF.views || {};
-TF.views.trainer = {
+App.views = App.views || {};
+App.views.trainer = {
 
-  // ══════════════════════════════════════════════
-  // DASHBOARD DO TREINADOR
-  // ══════════════════════════════════════════════
+  _alunosCache: [],
+
+  /* DASHBOARD DO TREINADOR */
   async renderDashboard() {
-    const u = TF.state.user;
-    document.getElementById('trainer-greeting').textContent = TF.utils.greeting(u?.nome);
-    document.getElementById('trainer-date').textContent =
-      new Date().toLocaleDateString('pt-BR',{ weekday:'long', day:'numeric', month:'long' });
+    const u = App.state.user;
+    const greet = document.getElementById('trainer-greeting');
+    const statAlunos = document.getElementById('trainer-stat-alunos');
+    const statTreinos = document.getElementById('trainer-stat-treinos');
 
-    const alunos = await TF.data.getAlunosDoTreinador(u?.id);
-    document.getElementById('trainer-stat-alunos').textContent = alunos.length;
+    if (greet) greet.textContent = App.utils.greeting(u?.nome);
 
-    // Atividade desta semana entre todos os alunos
-    document.getElementById('trainer-stat-ativos').textContent =
-      alunos.filter(a => a.profiles).length;
+    const alunos = await App.data.getAlunosDoTreinador(u?.id);
+    this._alunosCache = alunos || [];
 
-    this._renderAlunosList(alunos, 'trainer-alunos-quick');
+    if (statAlunos) statAlunos.textContent = this._alunosCache.length;
+
+    const treinos = await App.data.getTreinosDoTreinador(u?.id);
+    if (statTreinos) statTreinos.textContent = (treinos || []).length;
+
+    this._renderAlunosQuickList(this._alunosCache);
   },
 
-  // ══════════════════════════════════════════════
-  // LISTA DE ALUNOS
-  // ══════════════════════════════════════════════
-  async renderAlunos() {
-    const alunos = await TF.data.getAlunosDoTreinador(TF.state.user?.id);
-    this._renderAlunosList(alunos, 'trainer-alunos-full');
-  },
-
-  _renderAlunosList(alunos, containerId) {
-    const el = document.getElementById(containerId);
+  _renderAlunosQuickList(alunos) {
+    const el = document.getElementById('trainer-alunos-quick');
     if (!el) return;
+
     if (!alunos.length) {
-      el.innerHTML = `<div class="empty-state">
-        <div class="empty-state-icon">👥</div>
-        Nenhum aluno vinculado ainda.<br>
-        <button class="btn-primary" style="margin-top:16px" onclick="TF.views.trainer._openVincularModal()">
-          + Vincular Aluno
-        </button>
-      </div>`;
+      el.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">${App.icons.get('users', 40)}</div>
+          <h3>Nenhum aluno vinculado</h3>
+          <p>Vincule alunos para criar treinos personalizados.</p>
+          <button class="btn btn-primary" onclick="App.views.trainer._openVincularModal()">
+            ${App.icons.get('user-plus', 15)} Vincular aluno
+          </button>
+        </div>`;
       return;
     }
-    el.innerHTML = alunos.map(a => {
-      const p   = a.profiles || a; // Supabase join ou fallback
-      const ap  = a.aluno_perfil || {};
-      const ini = (p.nome||'?')[0].toUpperCase();
-      const obj = TF.GOALS[ap.objetivo] || '—';
-      return `
-        <div class="student-list-item" onclick="TF.views.trainer._openAlunoDetail('${p.id}')"
-          role="button" tabindex="0" aria-label="Ver detalhes de ${TF.utils.esc(p.nome)}">
-          <div class="stu-avatar" aria-hidden="true">${ini}</div>
-          <div style="flex:1">
-            <div class="stu-name">${TF.utils.esc(p.nome||'—')}</div>
-            <div class="stu-meta">${obj}${ap.peso ? ' · '+ap.peso+' kg' : ''}${ap.altura ? ' · '+ap.altura+' cm' : ''}</div>
-          </div>
-          <span class="plan-badge ${p.plan_type||'free'}">${p.plan_type==='premium'?'⭐ Premium':'Free'}</span>
-          <div class="stu-last-train">
-            <span>Último treino</span>
-            ${a.ultimo_treino ? TF.utils.fmtDate(a.ultimo_treino) : '—'}
-          </div>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" aria-hidden="true"><polyline points="9,18 15,12 9,6"/></svg>
-        </div>
-      `;
-    }).join('');
+
+    el.innerHTML = alunos.slice(0, 5).map(a => this._buildAlunoRow(a.aluno || a)).join('');
   },
 
-  // ══════════════════════════════════════════════
-  // DETALHE DO ALUNO
-  // ══════════════════════════════════════════════
-  async _openAlunoDetail(alunoId) {
-    TF.state.viewingAluno = alunoId;
+  /* LISTA DE ALUNOS */
+  async renderAlunos() {
+    const alunos = await App.data.getAlunosDoTreinador(App.state.user?.id);
+    this._alunosCache = alunos || [];
 
-    // Busca dados
-    const [history, notas, perfil] = await Promise.all([
-      TF.data.getHistoricoAluno(alunoId),
-      TF.data.getNotas(alunoId),
-      TF.data.getAlunoPerfil(alunoId),
+    const el = document.getElementById('trainer-alunos-list');
+    if (!el) return;
+
+    el.innerHTML = `
+      <div class="list-toolbar">
+        <div class="search-field">
+          <span class="search-icon">${App.icons.get('search',16)}</span>
+          <input type="search" id="aluno-search" placeholder="Buscar por nome ou email..." aria-label="Buscar aluno">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="App.views.trainer._openVincularModal()">
+          ${App.icons.get('user-plus',15)} Vincular aluno
+        </button>
+      </div>
+      <div id="alunos-results"></div>
+    `;
+
+    const input = document.getElementById('aluno-search');
+    if (input) {
+      input.addEventListener('input', () => this._filterAlunos(input.value));
+    }
+
+    this._filterAlunos('');
+  },
+
+  _filterAlunos(query) {
+    const q = (query || '').toLowerCase();
+    const filtered = this._alunosCache.filter(a => {
+      const al = a.aluno || a;
+      return !q ||
+        (al.nome || '').toLowerCase().includes(q) ||
+        (al.email || '').toLowerCase().includes(q);
+    });
+
+    const el = document.getElementById('alunos-results');
+    if (!el) return;
+
+    el.innerHTML = filtered.length
+      ? filtered.map(a => this._buildAlunoRow(a.aluno || a, true)).join('')
+      : `<p class="empty-text">Nenhum aluno encontrado.</p>`;
+  },
+
+  _buildAlunoRow(aluno, showActions = false) {
+    const ini = App.utils.initial(aluno?.nome);
+    const plan = aluno?.plan_type || 'free';
+
+    return `
+      <div class="aluno-row" role="listitem">
+        <div class="aluno-avatar">${ini}</div>
+        <div class="aluno-info">
+          <div class="aluno-name">${App.utils.esc(aluno?.nome || 'Aluno')}</div>
+          <div class="aluno-email">${App.utils.esc(aluno?.email || '')}</div>
+        </div>
+        <span class="chip chip-plan ${plan}">
+          ${plan === 'premium' ? 'Premium' : 'Free'}
+        </span>
+        ${showActions ? `
+          <div class="aluno-actions">
+            <button class="btn btn-secondary btn-sm" onclick="App.views.trainer.openAlunoDetail('${aluno?.id}')">
+              ${App.icons.get('eye',15)} Detalhes
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="App.boot.navigateTo('criar-treino','${aluno?.id}')">
+              ${App.icons.get('plus',15)} Treino
+            </button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  },
+
+  /* DETALHE DO ALUNO */
+  async openAlunoDetail(alunoId) {
+    App.state.selectedAluno = alunoId;
+
+    const [history, obs] = await Promise.all([
+      App.data.getHistory(alunoId),
+      App.data.getObservacoes ? App.data.getObservacoes(alunoId) : []
     ]);
 
-    // Busca nome do aluno da lista já carregada
-    const alunoNome = TF.state.alunosList?.find(a => (a.profiles?.id||a.id) === alunoId)?.profiles?.nome
-      || TF.ls('profile_' + alunoId)?.nome || 'Aluno';
+    const aluno =
+      this._alunosCache.find(a => (a.aluno || a)?.id === alunoId)?.aluno ||
+      this._alunosCache.find(a => (a.aluno || a)?.id === alunoId) ||
+      {};
 
-    document.getElementById('modal-aluno-content').innerHTML = `
-      <div style="margin-bottom:20px">
-        <div class="perfil-header" style="border:none;padding:0;margin-bottom:16px">
-          <div class="stu-avatar" style="width:52px;height:52px;font-size:22px" aria-hidden="true">
-            ${alunoNome[0].toUpperCase()}
-          </div>
-          <div>
-            <h3 style="font-size:20px">${TF.utils.esc(alunoNome)}</h3>
-            ${perfil?.objetivo ? `<div class="perfil-chip" style="display:inline-block;margin-top:4px">${TF.GOALS[perfil.objetivo]||''}</div>` : ''}
-          </div>
+    const content = document.getElementById('modal-aluno-content');
+    if (!content) return;
+
+    content.innerHTML = `
+      <div class="aluno-detail-header">
+        <div class="aluno-avatar lg">${App.utils.initial(aluno?.nome)}</div>
+        <div>
+          <h3>${App.utils.esc(aluno?.nome || 'Aluno')}</h3>
+          <p>${App.utils.esc(aluno?.email || '')}</p>
         </div>
+      </div>
 
-        <!-- Estatísticas rápidas -->
-        <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
-          <div class="stat-card" style="padding:14px 12px">
-            <div class="stat-val" style="font-size:28px">${history.length}</div>
-            <div class="stat-lbl">Treinos totais</div>
-          </div>
-          <div class="stat-card" style="padding:14px 12px">
-            <div class="stat-val" style="font-size:28px">${TF.utils.calcStreak(history).current}</div>
-            <div class="stat-lbl">Streak atual</div>
-          </div>
-          <div class="stat-card" style="padding:14px 12px">
-            <div class="stat-val" style="font-size:28px">${TF.utils.countWeekWorkouts(history)}</div>
-            <div class="stat-lbl">Esta semana</div>
-          </div>
+      <div class="aluno-stats-row">
+        <div class="mini-stat">
+          <div class="mini-stat-val">${history.length}</div>
+          <div class="mini-stat-lbl">Sessões</div>
         </div>
+        <div class="mini-stat">
+          <div class="mini-stat-val">${App.utils.calcStreak(history.map(h => h.data || h.date))}</div>
+          <div class="mini-stat-lbl">Streak</div>
+        </div>
+      </div>
 
-        <!-- Últimos treinos -->
-        <div class="sc-label" style="margin-bottom:8px">Últimos treinos</div>
-        ${history.slice(0,5).length ? `
-        <div class="section-card" style="margin-bottom:16px">
-          ${history.slice(0,5).map(h => `
-            <div class="activity-item">
-              <div class="activity-left">
-                <div class="activity-dot" aria-hidden="true"></div>
-                <div>
-                  <div class="activity-day-name">${TF.utils.esc(h.exercise_name||'Exercício')}</div>
-                  <div class="activity-date">${TF.utils.fmtDate(h.date)}</div>
-                </div>
-              </div>
-              <div style="text-align:right">
-                ${h.carga > 0 ? `<div style="font-family:var(--font-display);font-size:16px;color:var(--accent)">${h.carga} kg</div>` : ''}
-                <div style="font-size:11px;color:var(--muted)">${h.series}×${h.reps} reps</div>
-              </div>
+      <div class="obs-section">
+        <div class="obs-label">Nova observação</div>
+        <textarea id="nova-obs" rows="3" placeholder="Anotações, feedback, ajustes recomendados..."></textarea>
+        <button class="btn btn-primary btn-sm mt-8" onclick="App.views.trainer._saveObs('${alunoId}')">
+          ${App.icons.get('save',15)} Salvar
+        </button>
+      </div>
+
+      ${obs && obs.length ? `
+        <div class="obs-history">
+          <div class="obs-label">Observações anteriores</div>
+          ${obs.slice(0,5).map(o => `
+            <div class="obs-item">
+              <div class="obs-date">${App.utils.fmtDate((o.created_at || '').split('T')[0])}</div>
+              <p>${App.utils.esc(o.conteudo)}</p>
             </div>
           `).join('')}
-        </div>` : '<p class="c-muted" style="font-size:13px;margin-bottom:16px">Nenhum treino registrado ainda.</p>'}
-
-        <!-- Adicionar nota -->
-        <div class="sc-label" style="margin-bottom:8px">Adicionar observação</div>
-        <div class="form-group">
-          <textarea id="nota-nova" rows="3" placeholder="Notas de evolução, feedback, ajustes no treino..."></textarea>
         </div>
-        <button class="btn-primary" onclick="TF.views.trainer._saveNota('${alunoId}')" style="margin-bottom:20px">
-          💾 Salvar nota
+      ` : ''}
+
+      <div class="aluno-actions-footer">
+        <button class="btn btn-primary" onclick="App.boot.navigateTo('criar-treino','${alunoId}'); App.modal.close();">
+          ${App.icons.get('dumbbell',15)} Criar treino para este aluno
         </button>
-
-        <!-- Notas anteriores -->
-        ${notas.length ? `
-          <div class="sc-label" style="margin-bottom:8px">Observações anteriores</div>
-          ${notas.slice(0,5).map(n => `
-            <div class="nota-item">
-              <div class="nota-date">${TF.utils.fmtDate(n.created_at?.split('T')[0])}</div>
-              <div class="nota-text">${TF.utils.esc(n.conteudo)}</div>
-            </div>
-          `).join('')}` : ''}
       </div>
     `;
 
-    TF.modal.open('modal-aluno', `Aluno: ${TF.utils.esc(alunoNome)}`, null, { wide: true });
+    App.modal.open('modal-aluno', `Aluno: ${App.utils.esc(aluno?.nome || '')}`);
   },
 
-  async _saveNota(alunoId) {
-    const txt = document.getElementById('nota-nova')?.value?.trim();
-    if (!txt) { TF.utils.toast('Digite uma observação.', 'warn'); return; }
-    await TF.data.saveNota(TF.state.user.id, alunoId, txt);
-    TF.utils.toast('Observação salva! 📝');
-    document.getElementById('nota-nova').value = '';
-    // Reabrir com dados frescos
-    this._openAlunoDetail(alunoId);
+  async _saveObs(alunoId) {
+    const txt = document.getElementById('nova-obs')?.value?.trim();
+    if (!txt) {
+      App.utils.toast('Digite uma observação.', 'warn');
+      return;
+    }
+
+    if (App.data.saveObservacao) {
+      await App.data.saveObservacao(App.state.user.id, alunoId, txt);
+      App.utils.toast('Observação salva.');
+      this.openAlunoDetail(alunoId);
+    } else {
+      App.utils.toast('Função de observação ainda não disponível.', 'warn');
+    }
   },
 
-  // ══════════════════════════════════════════════
-  // VINCULAR ALUNO
-  // ══════════════════════════════════════════════
+  /* VINCULAR ALUNO */
   _openVincularModal() {
-    document.getElementById('modal-vincular-content').innerHTML = `
-      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
-        O aluno precisa ter uma conta no TrainFlow. Informe o email cadastrado.
-      </p>
-      <div class="form-group">
-        <label for="vincular-email">Email do aluno</label>
-        <input type="email" id="vincular-email" placeholder="aluno@email.com">
-      </div>
-      <div id="vincular-result"></div>
-    `;
-    TF.modal.open('modal-vincular', 'Vincular Aluno', () => this._doVincular());
+    App.modal.open('modal-vincular', 'Vincular Aluno', () => this._doVincular());
   },
 
   async _doVincular() {
     const email = document.getElementById('vincular-email')?.value?.trim();
-    if (!email) { TF.utils.toast('Informe o email do aluno.','warn'); return; }
-    const result = await TF.data.vincularAluno(TF.state.user.id, email);
-    if (result.error) {
-      document.getElementById('vincular-result').innerHTML =
-        `<div class="auth-error">${TF.utils.esc(result.error)}</div>`;
+    if (!email) {
+      App.utils.toast('Informe o email do aluno.', 'warn');
       return;
     }
-    TF.utils.toast(`${result.aluno?.nome || 'Aluno'} vinculado com sucesso! 🎉`);
-    TF.modal.close();
-    this.renderAlunos();
-  },
-};
 
-// ════════════════════════════════════════════════════════════
-// WORKOUT ENGINE
-// ════════════════════════════════════════════════════════════
-TF.workout = {
+    const result = await App.data.vincularAluno(App.state.user.id, email);
 
-  /** Inicia treino de um dia específico */
-  startDay(dayId) {
-    const day = TF.getDayById(dayId);
-    if (!day) return;
+    if (result.error) {
+      App.utils.toast(result.error, 'error');
+      return;
+    }
 
-    TF.state.activeWorkout = {
-      dayId,
-      startTime:          Date.now(),
-      logs:               {},
-      completedExercises: new Set(),
-    };
-
-    // Navega para a view de treino ativo
-    TF.app.navigateTo('treinar');
-
-    // Renderiza tela ativa
-    this._showActiveScreen(day);
+    App.utils.toast(`${result.aluno?.nome || 'Aluno'} vinculado!`);
+    App.modal.close();
+    await this.renderAlunos();
+    await this.renderDashboard();
   },
 
-  /** Renderiza tela de treino ativo */
-  _showActiveScreen(day) {
-    document.getElementById('workout-select-screen').classList.add('hidden');
-    const activeEl = document.getElementById('workout-active-screen');
-    activeEl.classList.remove('hidden');
+  /* CRIAR TREINO */
+  async renderCriarTreino(alunoId) {
+    App.state.selectedAluno = alunoId || null;
+    App.state.workoutDraft = [];
 
-    document.getElementById('active-day-name').textContent  = day.nome;
-    document.getElementById('active-day-focus').textContent = day.foco;
+    const alunos = this._alunosCache.length
+      ? this._alunosCache
+      : await App.data.getAlunosDoTreinador(App.state.user?.id);
 
-    this._updateProgress(day);
-    this._renderExercises(day);
-    this._startClock();
-  },
+    this._alunosCache = alunos || [];
 
-  _renderExercises(day) {
-    const container = document.getElementById('active-exercise-list');
-    container.innerHTML = day.exercicios.map((ex, i) => `
-      <div class="active-ex-card" id="aec-${ex.id}" role="listitem">
-        <div class="aec-header">
-          <div class="aec-left">
-            <div class="aec-num" aria-hidden="true">${i+1}</div>
+    const exercicios = await App.data.getExercicios();
+
+    const alunoSelect = document.getElementById('treino-aluno-select');
+    if (alunoSelect) {
+      alunoSelect.innerHTML =
+        `<option value="">Selecione o aluno...</option>` +
+        this._alunosCache.map(a => {
+          const al = a.aluno || a;
+          return `<option value="${al.id}" ${al.id === alunoId ? 'selected' : ''}>${App.utils.esc(al.nome)}</option>`;
+        }).join('');
+    }
+
+    const lib = document.getElementById('exercise-library');
+    if (lib) {
+      if (!exercicios.length) {
+        lib.innerHTML = `<p class="empty-text">Nenhum exercício encontrado.</p>`;
+      } else {
+        lib.innerHTML = exercicios.map(ex => `
+          <div class="exercise-lib-item">
             <div>
-              <div class="aec-name">${TF.utils.esc(ex.nome)}</div>
-              <div class="aec-muscle">${TF.utils.esc(ex.grupo)} · ${ex.descanso}</div>
+              <div class="exercise-lib-name">${App.utils.esc(ex.nome)}</div>
+              <div class="exercise-lib-meta">${App.utils.esc(ex.grupo_muscular)} · ${App.utils.esc(ex.tipo)}</div>
             </div>
+            <button class="btn btn-secondary btn-sm" onclick='App.views.trainer.addExerciseToDraft(${JSON.stringify(ex).replace(/'/g, "&apos;")})'>
+              ${App.icons.get('plus',14)} Adicionar
+            </button>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
-            <div class="aec-sets-reps">${ex.series}×${ex.reps}</div>
-            <span class="aec-done-mark" aria-hidden="true">✓</span>
-          </div>
-          <button class="btn-log-ex" onclick="TF.workout.openLogModal(${ex.id})"
-            aria-label="Registrar ${TF.utils.esc(ex.nome)}">Registrar</button>
+        `).join('');
+      }
+    }
+
+    this.renderDraft();
+  },
+
+  addExerciseToDraft(ex) {
+    App.state.workoutDraft.push({
+      exercicio_id: ex.id,
+      nome: ex.nome,
+      grupo_muscular: ex.grupo_muscular,
+      series: 3,
+      repeticoes: '10-12',
+      descanso: '60s',
+      observacoes: ''
+    });
+    this.renderDraft();
+  },
+
+  removeExerciseFromDraft(index) {
+    App.state.workoutDraft.splice(index, 1);
+    this.renderDraft();
+  },
+
+  updateDraftField(index, field, value) {
+    if (!App.state.workoutDraft[index]) return;
+    App.state.workoutDraft[index][field] = value;
+  },
+
+  renderDraft() {
+    const el = document.getElementById('treino-draft');
+    const count = document.getElementById('draft-count');
+
+    if (count) count.textContent = App.state.workoutDraft.length;
+    if (!el) return;
+
+    if (!App.state.workoutDraft.length) {
+      el.innerHTML = `<p class="empty-text">Nenhum exercício selecionado.</p>`;
+      return;
+    }
+
+    el.innerHTML = App.state.workoutDraft.map((ex, i) => `
+      <div class="draft-item">
+        <div class="draft-item-top">
+          <strong>${App.utils.esc(ex.nome)}</strong>
+          <button class="btn-icon-sm" onclick="App.views.trainer.removeExerciseFromDraft(${i})">×</button>
         </div>
-        <div class="aec-body">
-          <div class="aec-tips">${TF.utils.esc(ex.dicas)}</div>
-          <span class="aec-logged-info" id="aec-info-${ex.id}" aria-live="polite"></span>
+        <div class="draft-grid">
+          <input class="input-sm" type="number" min="1" value="${ex.series}" onchange="App.views.trainer.updateDraftField(${i}, 'series', this.value)">
+          <input class="input-sm" type="text" value="${App.utils.esc(ex.repeticoes)}" onchange="App.views.trainer.updateDraftField(${i}, 'repeticoes', this.value)">
+          <select class="input-sm" onchange="App.views.trainer.updateDraftField(${i}, 'descanso', this.value)">
+            ${App.REST_OPTIONS.map(r => `<option value="${r}" ${r === ex.descanso ? 'selected' : ''}>${r}</option>`).join('')}
+          </select>
         </div>
+        <textarea class="input-obs" placeholder="Observações" onchange="App.views.trainer.updateDraftField(${i}, 'observacoes', this.value)">${App.utils.esc(ex.observacoes || '')}</textarea>
       </div>
     `).join('');
   },
 
-  _updateProgress(day) {
-    const total = day.exercicios.length;
-    const done  = TF.state.activeWorkout?.completedExercises.size || 0;
-    const pct   = total > 0 ? (done / total) * 100 : 0;
-    const bar   = document.getElementById('workout-prog-bar');
-    const txt   = document.getElementById('workout-prog-text');
-    if (bar) bar.style.width  = pct + '%';
-    if (txt) txt.textContent  = `${done}/${total}`;
-  },
+  async saveTreino() {
+    const alunoId = document.getElementById('treino-aluno-select')?.value;
+    const nome = document.getElementById('treino-nome')?.value?.trim();
+    const descricao = document.getElementById('treino-descricao')?.value?.trim() || '';
 
-  _startClock() {
-    clearInterval(TF.state.clockInterval);
-    TF.state.clockSecs = 0;
-    TF.state.clockInterval = setInterval(() => {
-      TF.state.clockSecs++;
-      const el = document.getElementById('workout-clock');
-      if (el) el.textContent = TF.utils.fmtTime(TF.state.clockSecs);
-    }, 1000);
-  },
-
-  /** Abre modal de log de exercício */
-  openLogModal(exerciseId) {
-    TF.state.currentLogId = exerciseId;
-    const day = TF.getDayById(TF.state.activeWorkout?.dayId);
-    const ex  = day?.exercicios.find(e => e.id === exerciseId);
-    if (!ex) return;
-
-    const history  = TF.data.getHistorySync();
-    const lastLogs = history.filter(h => h.exercise_id === exerciseId)
-      .sort((a,b) => b.date > a.date ? 1 : -1);
-    const last = lastLogs[0];
-
-    document.getElementById('modal-ex-name').textContent = ex.nome;
-    document.getElementById('modal-ex-info').innerHTML =
-      `<strong>${ex.series} × ${ex.reps}</strong> · Descanso: ${ex.descanso} · ${ex.rpe}<br>
-       <em style="font-style:italic;color:var(--muted)">${TF.utils.esc(ex.obs)}</em>`;
-
-    const hintEl = document.getElementById('modal-last-log');
-    if (last) {
-      hintEl.textContent = `Último: ${last.carga}kg × ${last.reps} reps (${TF.utils.fmtDate(last.date)})`;
-      hintEl.classList.remove('hidden');
-      document.getElementById('modal-carga').value  = last.carga || '';
-      document.getElementById('modal-reps').value   = last.reps  || '';
-    } else {
-      hintEl.classList.add('hidden');
-      document.getElementById('modal-carga').value = '';
-      document.getElementById('modal-reps').value  = '';
+    if (!alunoId) {
+      App.utils.toast('Selecione o aluno.', 'warn');
+      return;
     }
-    document.getElementById('modal-series').value = ex.series;
+    if (!nome) {
+      App.utils.toast('Informe o nome do treino.', 'warn');
+      return;
+    }
+    if (!App.state.workoutDraft.length) {
+      App.utils.toast('Adicione pelo menos um exercício.', 'warn');
+      return;
+    }
 
-    TF.modal.open('modal-log', `Registrar — ${ex.nome}`);
-    setTimeout(() => document.getElementById('modal-carga')?.focus(), 100);
-  },
+    const treino = await App.data.criarTreino(
+      App.state.user.id,
+      alunoId,
+      nome,
+      descricao,
+      App.state.workoutDraft
+    );
 
-  /** Salva o log do exercício */
-  async saveLog() {
-    const exId   = TF.state.currentLogId;
-    const carga  = parseFloat(document.getElementById('modal-carga').value) || 0;
-    const reps   = parseInt(document.getElementById('modal-reps').value)   || 0;
-    const series = parseInt(document.getElementById('modal-series').value)  || 1;
-    if (!exId) return;
+    if (!treino) {
+      App.utils.toast('Erro ao salvar treino.', 'error');
+      return;
+    }
 
-    const ex    = TF.getExerciseById(exId);
-    const entry = {
-      exercise_id:   exId,
-      exercise_name: ex?.nome || '',
-      day_id:        TF.state.activeWorkout.dayId,
-      carga, reps, series,
-      date: TF.utils.today(),
-    };
-
-    await TF.data.saveLog(entry);
-    TF.state.activeWorkout.logs[exId] = entry;
-    TF.state.activeWorkout.completedExercises.add(exId);
-
-    // Marca card como concluído
-    const card   = document.getElementById(`aec-${exId}`);
-    const infoEl = document.getElementById(`aec-info-${exId}`);
-    if (card)   card.classList.add('done');
-    if (infoEl) infoEl.textContent = carga > 0 ? `${carga} kg × ${reps} reps` : `${reps} reps`;
-
-    // Atualiza progresso
-    const day = TF.getDayById(TF.state.activeWorkout.dayId);
-    if (day) this._updateProgress(day);
-
-    TF.modal.close();
-
-    // Timer de descanso
-    const restSecs = this._parseRestSecs(ex?.descanso || '90s');
-    this.startRest(restSecs);
-  },
-
-  _parseRestSecs(str) {
-    if (!str) return 90;
-    if (str.includes('2–3') || str.includes('2-3')) return 150;
-    if (str.includes('2 min'))  return 120;
-    if (str.includes('90'))     return 90;
-    if (str.includes('60–90') || str.includes('60-90')) return 75;
-    if (str.includes('60'))     return 60;
-    return 90;
-  },
-
-  /** Inicia timer de descanso */
-  startRest(secs) {
-    TF.state.restTotal     = secs;
-    TF.state.restRemaining = secs;
-    const overlay  = document.getElementById('rest-overlay');
-    const numEl    = document.getElementById('rest-num');
-    const ring     = document.getElementById('rest-ring-fill');
-    const CIRC     = 339.3;
-
-    overlay.classList.remove('hidden');
-    numEl.textContent = secs;
-    ring.style.strokeDashoffset = 0;
-
-    clearInterval(TF.state.restInterval);
-    TF.state.restInterval = setInterval(() => {
-      TF.state.restRemaining--;
-      if (TF.state.restRemaining <= 0) { this.skipRest(); return; }
-      numEl.textContent = TF.state.restRemaining;
-      ring.style.strokeDashoffset = (1 - TF.state.restRemaining / TF.state.restTotal) * CIRC;
-    }, 1000);
-  },
-
-  skipRest() {
-    clearInterval(TF.state.restInterval);
-    document.getElementById('rest-overlay').classList.add('hidden');
-  },
-
-  /** Cancela o treino atual */
-  cancel() {
-    if (!confirm('Cancelar o treino atual?')) return;
-    clearInterval(TF.state.clockInterval);
-    clearInterval(TF.state.restInterval);
-    TF.state.activeWorkout = null;
-    document.getElementById('workout-active-screen').classList.add('hidden');
-    document.getElementById('workout-select-screen').classList.remove('hidden');
-  },
-
-  /** Finaliza e salva o treino */
-  async finish() {
-    const done = TF.state.activeWorkout?.completedExercises.size || 0;
-    if (done === 0) { TF.utils.toast('Registre pelo menos um exercício!', 'warn'); return; }
-
-    clearInterval(TF.state.clockInterval);
-    clearInterval(TF.state.restInterval);
-    this.skipRest();
-
-    const mins  = Math.floor((TF.state.clockSecs || 0) / 60);
-    const day   = TF.getDayById(TF.state.activeWorkout?.dayId);
-    TF.utils.toast(`🎉 ${day?.nome||'Treino'} concluído! ${done} exercícios em ${mins} min.`, 'success', 4000);
-
-    TF.state.activeWorkout = null;
-    document.getElementById('workout-active-screen').classList.add('hidden');
-    document.getElementById('workout-select-screen').classList.remove('hidden');
-    TF.app.navigateTo('dashboard');
-  },
+    App.utils.toast('Treino salvo com sucesso!');
+    App.state.workoutDraft = [];
+    this.renderDraft();
+    App.boot.navigateTo('trainer-dashboard');
+  }
 };
 
-// ════════════════════════════════════════════════════════════
-// MODAL MANAGER
-// ════════════════════════════════════════════════════════════
-TF.modal = {
+/* MODAL MANAGER */
+App.modal = {
   _currentSave: null,
 
   open(id, title, onSave, opts = {}) {
     const el = document.getElementById(id);
     if (!el) return;
-    this._currentSave = onSave;
-    const titleEl = el.querySelector('.modal-header h3');
-    if (titleEl) titleEl.textContent = title;
-    if (opts.wide) el.querySelector('.modal-card').style.maxWidth = '640px';
-    else if (el.querySelector('.modal-card')) el.querySelector('.modal-card').style.maxWidth = '';
+
+    this._currentSave = onSave || null;
+
+    const titleEl = el.querySelector('.modal-title');
+    if (titleEl) titleEl.textContent = title || '';
+
+    const card = el.querySelector('.modal-card');
+    if (card) {
+      card.classList.toggle('modal-wide', !!opts.wide);
+    }
+
     el.classList.remove('hidden');
-    // Foca no primeiro input
-    setTimeout(() => el.querySelector('input, textarea, select')?.focus(), 100);
-    // Accessibility
-    el.setAttribute('aria-hidden','false');
+    el.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
+
+    setTimeout(() => {
+      el.querySelector('input, textarea, select, button')?.focus();
+    }, 50);
   },
 
   close() {
     document.querySelectorAll('.modal').forEach(m => {
       m.classList.add('hidden');
-      m.setAttribute('aria-hidden','true');
+      m.setAttribute('aria-hidden', 'true');
     });
     document.body.style.overflow = '';
     this._currentSave = null;
   },
 
   save() {
-    if (typeof this._currentSave === 'function') this._currentSave();
-  },
+    if (typeof this._currentSave === 'function') {
+      this._currentSave();
+    }
+  }
 };
