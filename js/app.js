@@ -239,7 +239,11 @@ window.handleRegister = () => App.auth.register();
 window.handleForgot = () => App.auth.forgotPassword();
 window.handleUpdatePassword = () => App.auth.updatePassword();
 window.handleLogout = () => App.auth.logout();
+window.handleResendConfirmation = () => App.auth.resendConfirmationEmail();
 
+window.closeModal = () => App.modal.close();
+window.saveModal = () => App.modal.save();
+window.saveTreino = () => App.views.trainer.saveTreino();
 /* ── Boot resiliente ───────────────────────────────────────────── */
 const startApp = () => {
   if (App.USE_SUPABASE && !App.state.sb && window.supabase?.createClient) {
