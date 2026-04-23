@@ -17,6 +17,47 @@
    UTILITÁRIOS GERAIS
    ================================================================= */
 App.utils = {
+  EXERCISE_VIDEO_QUERIES: {
+    'supino reto com barra': 'supino reto com barra execucao correta',
+    'supino reto': 'supino reto com barra execucao correta',
+    'supino reto com halteres': 'supino reto com halteres execucao correta',
+    'supino inclinado com halteres': 'supino inclinado com halteres execucao correta',
+    'crucifixo com halteres': 'crucifixo com halteres execucao correta',
+    'peck deck': 'peck deck execucao correta',
+    'puxada frontal': 'puxada frontal pulley execucao correta',
+    'remada curvada com barra': 'remada curvada com barra execucao correta',
+    'remada unilateral com halter': 'remada unilateral com halter execucao correta',
+    'remada baixa no cabo': 'remada baixa no cabo execucao correta',
+    'barra fixa': 'barra fixa execucao correta',
+    'agachamento livre': 'agachamento livre execucao correta',
+    'leg press 45': 'leg press 45 execucao correta',
+    'cadeira extensora': 'cadeira extensora execucao correta',
+    'mesa flexora': 'mesa flexora execucao correta',
+    'afundo com halteres': 'afundo com halteres execucao correta',
+    'hip thrust': 'hip thrust execucao correta',
+    'glute bridge': 'glute bridge execucao correta',
+    'coice na polia': 'coice na polia execucao correta',
+    'abducao na maquina': 'abducao na maquina execucao correta',
+    'desenvolvimento com halteres': 'desenvolvimento com halteres execucao correta',
+    'elevacao lateral': 'elevacao lateral execucao correta',
+    'elevacao frontal': 'elevacao frontal execucao correta',
+    'face pull': 'face pull execucao correta',
+    'rosca direta': 'rosca direta execucao correta',
+    'rosca alternada': 'rosca alternada execucao correta',
+    'rosca martelo': 'rosca martelo execucao correta',
+    'triceps corda': 'triceps corda execucao correta',
+    'triceps barra': 'triceps barra execucao correta',
+    'triceps frances': 'triceps frances execucao correta',
+    'prancha': 'prancha abdominal execucao correta',
+    'abdominal crunch': 'abdominal crunch execucao correta',
+    'elevacao de pernas': 'elevacao de pernas abdominal execucao correta',
+    'dead bug': 'dead bug exercicio execucao correta',
+    'esteira caminhada': 'esteira caminhada postura correta',
+    'bike ergonometrica': 'bike ergonometrica regulagem e execucao correta',
+    'eliptico': 'eliptico execucao correta',
+    'hiit na bike': 'hiit na bike como fazer',
+  },
+
   /* Retorna a data atual no formato YYYY-MM-DD */
   today() {
     return new Date().toISOString().split('T')[0];
@@ -213,14 +254,52 @@ App.utils = {
   },
 
   youtubeEmbedUrl(query) {
-    const term = encodeURIComponent(String(query || '').trim());
-    return `https://www.youtube-nocookie.com/embed?listType=search&list=${term}`;
+    const normalized = this.normalizeSearchTerm(query);
+    const term = encodeURIComponent(normalized);
+    return `https://www.youtube.com/embed/videoseries?listType=search&list=${term}`;
+  },
+
+  youtubeSearchUrl(query) {
+    const normalized = this.normalizeSearchTerm(query);
+    return `https://www.youtube.com/results?search_query=${encodeURIComponent(normalized)}`;
+  },
+
+  normalizeSearchTerm(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\s-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  },
+
+  resolveExerciseVideoQuery(exerciseName) {
+    const normalized = this.normalizeSearchTerm(exerciseName);
+    const direct = this.EXERCISE_VIDEO_QUERIES[normalized];
+    if (direct) return direct;
+
+    const partial = Object.entries(this.EXERCISE_VIDEO_QUERIES).find(([key]) =>
+      normalized.includes(key) || key.includes(normalized)
+    );
+    if (partial) return partial[1];
+
+    if (normalized.includes('supino')) return 'supino musculacao execucao correta';
+    if (normalized.includes('agachamento')) return 'agachamento livre execucao correta';
+    if (normalized.includes('remada')) return 'remada musculacao execucao correta';
+    if (normalized.includes('rosca')) return 'rosca biceps execucao correta';
+    if (normalized.includes('triceps')) return 'triceps musculacao execucao correta';
+    if (normalized.includes('elevacao')) return 'elevacao ombro execucao correta';
+    if (normalized.includes('cardio') || normalized.includes('bike') || normalized.includes('esteira')) {
+      return `${normalized} como fazer corretamente`;
+    }
+
+    return `${normalized} execucao correta musculacao`;
   },
 
   openExerciseVideo(exerciseName) {
-    const frame = document.getElementById('exercise-video-frame');
-    if (frame) frame.src = this.youtubeEmbedUrl(`${exerciseName} execução correta musculação`);
-    App.modal.open('modal-video', `Execução: ${exerciseName}`);
+    const query = this.resolveExerciseVideoQuery(exerciseName);
+    window.open(this.youtubeSearchUrl(query), '_blank', 'noopener,noreferrer');
   },
 
   destroyChart(key) {
