@@ -80,7 +80,23 @@ App.icons = {
       'bell':           `<svg ${s}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>`,
       'grid':           `<svg ${s}><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>`,
       'list':           `<svg ${s}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`,
-      'percentage':     `<svg ${s}><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>`,
+      'percentage':     `<svg ${s}><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>`
+       // Novos ícones para ciência, cardio, premium, métricas e UX
+'play-circle': `<svg ${s}><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>`,
+'crown': `<svg ${s}><path d="m3 18 2-9 5 4 2-7 2 7 5-4 2 9H3Z"/><path d="M3 18h18"/></svg>`,
+'star': `<svg ${s}><polygon points="12 2 15.1 8.3 22 9.3 17 14.2 18.2 21 12 17.7 5.8 21 7 14.2 2 9.3 8.9 8.3 12 2"/></svg>`,
+'trophy': `<svg ${s}><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v4a5 5 0 0 1-10 0V4Z"/><path d="M17 5h3v3a4 4 0 0 1-4 4"/><path d="M7 5H4v3a4 4 0 0 0 4 4"/></svg>`,
+'calendar-check': `<svg ${s}><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg>`,
+'bar-chart-3': `<svg ${s}><path d="M3 3v18h18"/><path d="M7 14v4"/><path d="M12 10v8"/><path d="M17 6v12"/></svg>`,
+'layers': `<svg ${s}><path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/></svg>`,
+'microscope': `<svg ${s}><path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 0 0 0-14h-1"/><path d="M9 14 5 8l3-2 4 6"/><path d="M14.5 9.5 17 7"/><path d="M10 6 8 3"/></svg>`,
+'gauge': `<svg ${s}><path d="M12 14 16 10"/><path d="M20 13a8 8 0 1 0-16 0"/><path d="M6 18h12"/></svg>`,
+'running': `<svg ${s}><circle cx="13.5" cy="4.5" r="2.5"/><path d="m14 7-2 4 2 2 3 1"/><path d="m10 11-2 3-3 2"/><path d="m12 13-1 5"/><path d="m15 14 2 5"/></svg>`,
+'bike': `<svg ${s}><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 17.5 12 10h-3"/><path d="m12 10 4-2 2 3"/><path d="M9 17.5 12 10"/><path d="M10 6h4"/></svg>`,
+'waves': `<svg ${s}><path d="M2 12c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/><path d="M2 17c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"/></svg>`,
+'footprints': `<svg ${s}><path d="M6 7c0-2 1-4 3-4s3 2 3 4-1 6-3 6-3-4-3-6Z"/><path d="M15 13c0-2 1-4 3-4s3 2 3 4-1 6-3 6-3-4-3-6Z"/></svg>`,
+'dna': `<svg ${s}><path d="M6 2c6 0 6 20 12 20"/><path d="M18 2C12 2 12 22 6 22"/><path d="M8 6h8"/><path d="M8 12h8"/><path d="M8 18h8"/></svg>`,
+'brain': `<svg ${s}><path d="M9.5 3a3.5 3.5 0 0 0-3.5 3.5v.5A3 3 0 0 0 3 10v1a3 3 0 0 0 2 2.83V15a3 3 0 0 0 3 3h1"/><path d="M14.5 3A3.5 3.5 0 0 1 18 6.5v.5A3 3 0 0 1 21 10v1a3 3 0 0 1-2 2.83V15a3 3 0 0 1-3 3h-1"/><path d="M12 3v18"/><path d="M8 12h8"/></svg>`,
     };
     return map[name] || map['grid'];
   },
