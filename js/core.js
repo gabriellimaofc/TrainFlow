@@ -625,3 +625,4 @@ App.auth = {
   isPremium() { return App.state.user?.plan_type === 'premium'; },
   isTrainer() { return App.state.user?.role === 'treinador'; },
 };
+window.handleResendConfirmation = () => App.auth.resendConfirmationEmail();
